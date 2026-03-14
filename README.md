@@ -1,3 +1,30 @@
+# SistemaTickets — Frontend (Angular)
+
+Proyecto frontend Angular (esqueleto) para la plataforma de gestión y venta de eventos.
+
+Arranque rápido:
+
+```bash
+cd SistemaTickets
+npm install
+npx @angular/cli serve --host 0.0.0.0 --port 4200
+```
+
+Estructura importante creada bajo `src/app`:
+- `core/` servicios, guards, interceptors, models
+- `shared/` componentes reutilizables
+- `modules/` módulos feature (`auth`, `events`, `booking`, `dashboard`)
+- `layouts/` `public-layout` y `dashboard-layout`
+
+Notas:
+- Las llamadas a API usan `ApiService` apuntando a `https://api.example.com` (reemplazar).
+- Interceptores funcionales `authInterceptor` y `errorInterceptor` fueron añadidos y registrados.
+- Autenticación básica por JWT usando `AuthService` y `localStorage`.
+
+Siguientes pasos recomendados:
+- Conectar `ApiService` a la API real.
+- Reemplazar mocks por llamadas HTTP.
+- Integrar Angular Material o Bootstrap según diseño deseado.
 # SistemaTickets
 
 This project was generated using [Angular CLI](https://github.com/angular/angular-cli) version 21.1.4.
