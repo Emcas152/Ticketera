@@ -13,8 +13,8 @@ import { EventItem } from '../../../core/models/event.model';
       <div class="body">
         <h3>{{ event.name }}</h3>
         <div class="meta">{{ event.date }} • {{ event.location }}</div>
-        <div class="price">Desde ${{ event.basePrice }}</div>
-        <a [routerLink]="['/event', event.id]">Ver detalle</a>
+        <div class="price">GTQ {{ event.basePrice }}</div>
+        <a [routerLink]="['/event']" [queryParams]="{ id: event.id }">Ver detalle</a>
       </div>
     </article>
   `,

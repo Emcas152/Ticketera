@@ -9,7 +9,15 @@ export const routes: Routes = [
     component: PublicLayout,
     children: [
       { path: '', component: EventsListComponent },
-      { path: 'event/:id', component: EventDetailComponent }
+      { path: 'event', component: EventDetailComponent }
     ]
   }
 ];
+
+// Provide prerender params for dynamic event routes (used by prerender)
+export function getPrerenderParams() {
+  return [
+    { params: { id: '1' } },
+    { params: { id: '2' } }
+  ];
+}
