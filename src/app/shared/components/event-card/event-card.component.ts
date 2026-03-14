@@ -1,17 +1,18 @@
 import { Component, Input } from '@angular/core';
 import { CommonModule } from '@angular/common';
+import { RouterLink } from '@angular/router';
 import { EventItem } from '../../../core/models/event.model';
 
 @Component({
   selector: 'app-event-card',
   standalone: true,
-  imports: [CommonModule],
+  imports: [CommonModule, RouterLink],
   template: `
     <article class="card">
       <img *ngIf="event.image" [src]="event.image" alt="{{ event.name }}" />
       <div class="body">
         <h3>{{ event.name }}</h3>
-        <div class="meta">{{ event.date | date:'medium' }} • {{ event.location }}</div>
+        <div class="meta">{{ event.date }} • {{ event.location }}</div>
         <div class="price">Desde ${{ event.basePrice }}</div>
         <a [routerLink]="['/event', event.id]">Ver detalle</a>
       </div>

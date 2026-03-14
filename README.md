@@ -25,6 +25,10 @@ Siguientes pasos recomendados:
 - Conectar `ApiService` a la API real.
 - Reemplazar mocks por llamadas HTTP.
 - Integrar Angular Material o Bootstrap según diseño deseado.
+
+PWA
+- Se añadió soporte básico PWA: `manifest.webmanifest`, `service-worker.js` y registro en `main.ts`.
+- Reemplaza los iconos en `src/assets/icons/` por imágenes reales para mejor experiencia.
 # SistemaTickets
 
 This project was generated using [Angular CLI](https://github.com/angular/angular-cli) version 21.1.4.
