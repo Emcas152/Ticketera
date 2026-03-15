@@ -1,20 +1,33 @@
-import { Component } from '@angular/core';
 import { CommonModule } from '@angular/common';
+import { Component } from '@angular/core';
 import { RouterOutlet } from '@angular/router';
-import { NavbarComponent } from '../../shared/components/navbar/navbar.component';
 import { FooterComponent } from '../../shared/components/footer/footer.component';
+import { NavbarComponent } from '../../shared/components/navbar/navbar.component';
 
 @Component({
-  selector: 'public-layout',
+  selector: 'app-public-layout',
   standalone: true,
   imports: [CommonModule, RouterOutlet, NavbarComponent, FooterComponent],
   template: `
-    <app-navbar></app-navbar>
-    <main class="container">
-      <router-outlet></router-outlet>
+    <app-navbar />
+    <main class="public-shell">
+      <router-outlet />
     </main>
-    <app-footer></app-footer>
+    <app-footer />
   `,
-  styles: [`.container{padding:18px;max-width:1100px;margin:0 auto}`]
+  styles: [
+    `
+      .public-shell {
+        min-height: calc(100vh - 144px);
+        padding: 0 24px 48px;
+      }
+
+      @media (max-width: 768px) {
+        .public-shell {
+          padding: 0 16px 32px;
+        }
+      }
+    `
+  ]
 })
 export class PublicLayout {}

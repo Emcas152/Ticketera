@@ -1,1 +1,97 @@
-/* You can add global styles to this file, and also import other style files */
+@font-face {
+  font-family: 'Eurostile Extended';
+  src: url('./assets/icons/EurostileExtendedBlack.ttf') format('truetype');
+  font-weight: 800;
+  font-style: normal;
+}
+
+:root {
+  --brand-primary: #0f62fe;
+  --brand-accent: #ff7f11;
+  --brand-ink: #07111b;
+  --surface: rgba(255, 255, 255, 0.82);
+  --surface-border: rgba(8, 15, 30, 0.08);
+  --text-primary: #102238;
+  --text-muted: #5e7188;
+  --page-max: 1240px;
+}
+
+html,
+body {
+  min-height: 100%;
+}
+
+body {
+  margin: 0;
+  font-family: 'Segoe UI', 'Helvetica Neue', sans-serif;
+  color: var(--text-primary);
+  background:
+    radial-gradient(circle at top left, rgba(15, 98, 254, 0.08), transparent 28%),
+    radial-gradient(circle at bottom right, rgba(255, 127, 17, 0.1), transparent 24%),
+    linear-gradient(180deg, #f7f9fc 0%, #eef3f9 100%);
+}
+
+h1,
+h2,
+h3,
+h4 {
+  margin: 0;
+  font-family: 'Eurostile Extended', 'Segoe UI', sans-serif;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+}
+
+a {
+  color: inherit;
+}
+
+.page-shell {
+  width: min(100%, var(--page-max));
+  margin: 0 auto;
+}
+
+.panel-surface {
+  padding: 24px;
+  border: 1px solid var(--surface-border);
+  border-radius: 28px;
+  background: var(--surface);
+  box-shadow: 0 22px 60px rgba(7, 17, 27, 0.08);
+  backdrop-filter: blur(14px);
+}
+
+.eyebrow {
+  margin: 0 0 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  font-size: 0.75rem;
+}
+
+.mat-mdc-raised-button:not(:disabled),
+.mat-mdc-unelevated-button:not(:disabled) {
+  box-shadow: none;
+}
+
+.success-toast {
+  --mdc-snackbar-container-color: #173d30;
+  --mat-snack-bar-button-color: #cbffde;
+  --mdc-snackbar-supporting-text-color: #f2fff6;
+}
+
+.error-toast {
+  --mdc-snackbar-container-color: #5f1d1d;
+  --mat-snack-bar-button-color: #ffdada;
+  --mdc-snackbar-supporting-text-color: #fff1f1;
+}
+
+.info-toast {
+  --mdc-snackbar-container-color: #11263d;
+  --mat-snack-bar-button-color: #dbebff;
+  --mdc-snackbar-supporting-text-color: #eef5ff;
+}
+
+@media (max-width: 768px) {
+  .panel-surface {
+    padding: 18px;
+    border-radius: 24px;
+  }
+}

@@ -1,6 +1,9 @@
 export interface User {
-  id?: string;
-  name?: string;
+  id: string;
+  fullName: string;
   email: string;
-  token?: string;
+  phone?: string;
+  city?: string;
+  membershipTier: 'Core' | 'Prime' | 'Elite';
+  avatarUrl?: string;
 }

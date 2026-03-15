@@ -1,17 +1,21 @@
 import { Routes } from '@angular/router';
-import { SeatMapComponent } from './seat-map.component';
+import { authGuard } from '../../core/guards/auth.guard';
+import { PublicLayout } from '../../layouts/public-layout/public-layout.component';
 import { CartComponent } from './cart.component';
 import { ConfirmComponent } from './confirm.component';
-import { PublicLayout } from '../../layouts/public-layout/public-layout.component';
+import { HistoryComponent } from './history.component';
+import { SeatMapComponent } from './seat-map.component';
 
 export const routes: Routes = [
   {
     path: '',
     component: PublicLayout,
     children: [
-      { path: '', component: SeatMapComponent },
-      { path: 'cart', component: CartComponent },
-      { path: 'confirm', component: ConfirmComponent }
+      { path: ':eventId/seats', component: SeatMapComponent, canActivate: [authGuard] },
+      { path: 'cart', component: CartComponent, canActivate: [authGuard] },
+      { path: 'confirm', component: ConfirmComponent, canActivate: [authGuard] },
+      { path: 'history', component: HistoryComponent, canActivate: [authGuard] },
+      { path: '', pathMatch: 'full', redirectTo: 'history' }
     ]
   }
 ];

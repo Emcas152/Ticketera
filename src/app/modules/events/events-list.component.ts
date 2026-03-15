@@ -1,29 +1,84 @@
-import { Component, OnInit } from '@angular/core';
-import { CommonModule } from '@angular/common';
+import { AsyncPipe, CommonModule } from '@angular/common';
+import { Component, inject } from '@angular/core';
+import { EventFilters } from '../../core/models/event.model';
+import { EventService } from '../../core/services/event.service';
 import { EventCardComponent } from '../../shared/components/event-card/event-card.component';
-import { ApiService } from '../../core/services/api.service';
-import { EventItem } from '../../core/models/event.model';
+import { EventFiltersComponent } from '../../shared/components/event-filters/event-filters.component';
 
 @Component({
-  selector: 'events-list',
+  selector: 'app-events-list',
   standalone: true,
-  imports: [CommonModule, EventCardComponent],
+  imports: [CommonModule, AsyncPipe, EventCardComponent, EventFiltersComponent],
   template: `
-    <h1>Próximos eventos</h1>
-    <div class="grid">
-      <app-event-card *ngFor="let e of events" [event]="e"></app-event-card>
-    </div>
+    <section class="page-shell section-header">
+      <div>
+        <p class="eyebrow">Catalog</p>
+        <h1>Listado de eventos</h1>
+        <p class="section-copy">Filtra por categoria, ciudad, rango de precio o ventana temporal.</p>
+      </div>
+    </section>
+
+    <section class="page-shell">
+      <app-event-filters
+        [categories]="categories"
+        [cities]="cities"
+        [filters]="filters"
+        (filtersChange)="onFiltersChange($event)"
+      />
+    </section>
+
+    <section class="page-shell results-shell">
+      <p class="results-count">{{ (events$ | async)?.length ?? 0 }} resultados</p>
+
+      <div class="grid">
+        <app-event-card *ngFor="let event of events$ | async" [event]="event" />
+      </div>
+    </section>
   `,
-  styles: [`.grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(320px,1fr));gap:12px}`]
+  styles: [
+    `
+      .section-header {
+        padding-top: 24px;
+      }
+
+      .section-copy,
+      .results-count {
+        color: var(--text-muted);
+      }
+
+      .results-shell {
+        padding-top: 24px;
+      }
+
+      .grid {
+        display: grid;
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+        gap: 20px;
+      }
+
+      @media (max-width: 1100px) {
+        .grid {
+          grid-template-columns: repeat(2, minmax(0, 1fr));
+        }
+      }
+
+      @media (max-width: 768px) {
+        .grid {
+          grid-template-columns: 1fr;
+        }
+      }
+    `
+  ]
 })
-export class EventsListComponent implements OnInit {
-  events: EventItem[] = [];
-  constructor(private api: ApiService) {}
-  ngOnInit() {
-    // replace with real API call
-    this.events = [
-      { id: '1', name: 'Concierto Demo', date: new Date().toISOString(), location: 'Auditorio', basePrice: 20, image: '' },
-      { id: '2', name: 'Festival Demo', date: new Date().toISOString(), location: 'Plaza', basePrice: 35, image: '' }
-    ];
+export class EventsListComponent {
+  private readonly eventService = inject(EventService);
+  filters = this.eventService.getDefaultFilters();
+  categories = this.eventService.getCategories();
+  cities = this.eventService.getCities();
+  events$ = this.eventService.getEvents(this.filters);
+
+  onFiltersChange(filters: EventFilters): void {
+    this.filters = filters;
+    this.events$ = this.eventService.getEvents(filters);
   }
 }

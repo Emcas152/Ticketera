@@ -1,9 +1,23 @@
 import { Seat } from './seat.model';
 
-export interface BookingItem {
-  id?: string;
-  eventId: string;
-  seats: Seat[];
+export interface BookingTotals {
+  subtotal: number;
+  serviceFee: number;
+  taxes: number;
   total: number;
-  createdAt?: string;
+}
+
+export interface BookingRecord {
+  id: string;
+  orderNumber: string;
+  eventId: string;
+  eventName: string;
+  eventDate: string;
+  venueName: string;
+  seats: Seat[];
+  totals: BookingTotals;
+  createdAt: string;
+  paymentMethod: string;
+  status: 'confirmed' | 'pending' | 'cancelled';
+  qrCode: string;
 }
