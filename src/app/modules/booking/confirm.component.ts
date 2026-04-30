@@ -1,8 +1,10 @@
 import { AsyncPipe, CommonModule, DatePipe } from '@angular/common';
-import { Component, inject } from '@angular/core';
+import { Component, DestroyRef, inject } from '@angular/core';
+import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { RouterLink } from '@angular/router';
 import { BookingRecord } from '../../core/models/booking.model';
 import { BookingService } from '../../core/services/booking.service';
+import { TicketPdfService } from '../../core/services/ticket-pdf.service';
 import { MATERIAL_IMPORTS } from '../../shared/material/material-imports';
 import { CurrencyGtqPipe } from '../../shared/pipes/currency-gtq.pipe';
 
@@ -11,7 +13,7 @@ import { CurrencyGtqPipe } from '../../shared/pipes/currency-gtq.pipe';
   standalone: true,
   imports: [CommonModule, AsyncPipe, DatePipe, RouterLink, CurrencyGtqPipe, ...MATERIAL_IMPORTS],
   template: `
-    <section class="page-shell" *ngIf="booking$ | async as booking">
+    <section class="page-shell" *ngIf="booking$ | async as booking; else pendingOrEmpty">
       <article class="confirm-shell panel-surface">
         <div>
           <p class="eyebrow">Confirmed</p>
@@ -35,6 +37,21 @@ import { CurrencyGtqPipe } from '../../shared/pipes/currency-gtq.pipe';
         </div>
       </article>
     </section>
+
+    <ng-template #pendingOrEmpty>
+      <section class="page-shell">
+        <article class="confirm-shell panel-surface empty-state">
+          <h1>Procesando compra</h1>
+          <p class="section-copy" *ngIf="hasPendingSeats; else noSelection">
+            Completa el pago en el carrito para confirmar tu compra.
+          </p>
+          <ng-template #noSelection>
+            <p class="section-copy">No hay una compra pendiente. Vuelve al catálogo para elegir un evento.</p>
+          </ng-template>
+          <a mat-stroked-button routerLink="/events">Ir a eventos</a>
+        </article>
+      </section>
+    </ng-template>
   `,
   styles: [
     `
@@ -82,6 +99,10 @@ import { CurrencyGtqPipe } from '../../shared/pipes/currency-gtq.pipe';
         text-align: center;
       }
 
+      .empty-state {
+        justify-items: start;
+      }
+
       @media (max-width: 960px) {
         .confirm-grid {
           grid-template-columns: 1fr;
@@ -92,29 +113,25 @@ import { CurrencyGtqPipe } from '../../shared/pipes/currency-gtq.pipe';
 })
 export class ConfirmComponent {
   private readonly booking = inject(BookingService);
+  private readonly ticketPdf = inject(TicketPdfService);
+  private readonly destroyRef = inject(DestroyRef);
   readonly booking$ = this.booking.currentBooking$;
+  hasPendingSeats = this.booking.getSelectedSeats().length > 0;
+
+  constructor() {
+    this.booking.currentBooking$
+      .pipe(takeUntilDestroyed(this.destroyRef))
+      .subscribe((booking) => {
+        this.hasPendingSeats = this.booking.getSelectedSeats().length > 0;
+
+      });
+  }
 
   seatLabels(booking: BookingRecord): string {
     return booking.seats.map((seat) => seat.label).join(', ');
   }
 
-  downloadTicket(booking: BookingRecord): void {
-    const content = [
-      `Orden: ${booking.orderNumber}`,
-      `Evento: ${booking.eventName}`,
-      `Fecha: ${booking.eventDate}`,
-      `Venue: ${booking.venueName}`,
-      `Asientos: ${this.seatLabels(booking)}`,
-      `Total: ${booking.totals.total}`,
-      `QR: ${booking.qrCode}`
-    ].join('\n');
-
-    const blob = new Blob([content], { type: 'text/plain;charset=utf-8' });
-    const url = URL.createObjectURL(blob);
-    const anchor = document.createElement('a');
-    anchor.href = url;
-    anchor.download = `${booking.orderNumber}.txt`;
-    anchor.click();
-    URL.revokeObjectURL(url);
+  async downloadTicket(booking: BookingRecord): Promise<void> {
+    await this.ticketPdf.downloadTicket(booking);
   }
 }

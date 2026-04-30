@@ -7,6 +7,20 @@ export interface BookingTotals {
   total: number;
 }
 
+export interface PaymentDetails {
+  cardholderName: string;
+  cardNumber: string;
+  expiry: string;
+  cvv: string;
+}
+
+export interface PaymentResult {
+  status: 'approved' | 'declined';
+  authorizationCode?: string;
+  message: string;
+  paymentMethod: string;
+}
+
 export interface BookingRecord {
   id: string;
   orderNumber: string;
