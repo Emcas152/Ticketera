@@ -13,6 +13,7 @@ import { MATERIAL_IMPORTS } from '../../shared/material/material-imports';
   template: `
     <section class="hero page-shell">
       <div class="hero-copy">
+        <img class="hero-logo" src="/assets/icons/alcon-white-ui.png" alt="ALCON Productions" />
         <p class="eyebrow">Event commerce platform</p>
         <h1>Descubre, reserva y gestiona eventos con una UX lista para escalar.</h1>
         <p class="lead">
@@ -81,12 +82,19 @@ import { MATERIAL_IMPORTS } from '../../shared/material/material-imports';
 
       .hero-copy {
         padding: 56px;
-        border-radius: 36px;
+        border-radius: var(--radius-lg);
         background:
-          radial-gradient(circle at top left, rgba(255, 127, 17, 0.28), transparent 32%),
-          radial-gradient(circle at bottom right, rgba(15, 98, 254, 0.22), transparent 42%),
-          linear-gradient(145deg, #07111b 0%, #102238 100%);
+          radial-gradient(circle at top left, rgba(186, 28, 28, 0.28), transparent 32%),
+          radial-gradient(circle at bottom right, rgba(0, 68, 137, 0.24), transparent 42%),
+          linear-gradient(145deg, #252525 0%, #00315f 100%);
         color: #f3f7ff;
+        box-shadow: var(--shadow-soft);
+      }
+
+      .hero-logo {
+        width: min(280px, 52%);
+        height: auto;
+        margin-bottom: 12px;
       }
 
       .hero-copy h1 {

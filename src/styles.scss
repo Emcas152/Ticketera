@@ -1,19 +1,16 @@
-@font-face {
-  font-family: 'Eurostile Extended';
-  src: url('./assets/icons/EurostileExtendedBlack.ttf') format('truetype');
-  font-weight: 800;
-  font-style: normal;
-}
-
 :root {
-  --brand-primary: #0f62fe;
-  --brand-accent: #ff7f11;
-  --brand-ink: #07111b;
-  --surface: rgba(255, 255, 255, 0.82);
+  --brand-primary: #004489;
+  --brand-accent: #ba1c1c;
+  --brand-ink: #252525;
+  --surface: rgba(255, 255, 255, 0.96);
   --surface-border: rgba(8, 15, 30, 0.08);
-  --text-primary: #102238;
-  --text-muted: #5e7188;
+  --text-primary: #152234;
+  --text-muted: #5a6472;
   --page-max: 1240px;
+  --radius-md: 12px;
+  --radius-lg: 18px;
+  --shadow-soft: 0 5px 20px rgba(0, 0, 0, 0.08);
+  --shadow-topbar: 1px 0 10px rgba(0, 0, 0, 0.18);
 }
 
 html,
@@ -26,9 +23,7 @@ body {
   font-family: 'Segoe UI', 'Helvetica Neue', sans-serif;
   color: var(--text-primary);
   background:
-    radial-gradient(circle at top left, rgba(15, 98, 254, 0.08), transparent 28%),
-    radial-gradient(circle at bottom right, rgba(255, 127, 17, 0.1), transparent 24%),
-    linear-gradient(180deg, #f7f9fc 0%, #eef3f9 100%);
+    linear-gradient(180deg, #f4f7fb 0%, #edf2f7 100%);
 }
 
 h1,
@@ -36,7 +31,7 @@ h2,
 h3,
 h4 {
   margin: 0;
-  font-family: 'Eurostile Extended', 'Segoe UI', sans-serif;
+  font-family: 'Bahnschrift', 'Arial Narrow', 'Segoe UI', sans-serif;
   letter-spacing: 0.02em;
   text-transform: uppercase;
 }
@@ -53,10 +48,9 @@ a {
 .panel-surface {
   padding: 24px;
   border: 1px solid var(--surface-border);
-  border-radius: 28px;
+  border-radius: var(--radius-lg);
   background: var(--surface);
-  box-shadow: 0 22px 60px rgba(7, 17, 27, 0.08);
-  backdrop-filter: blur(14px);
+  box-shadow: var(--shadow-soft);
 }
 
 .eyebrow {
@@ -69,6 +63,237 @@ a {
 .mat-mdc-raised-button:not(:disabled),
 .mat-mdc-unelevated-button:not(:disabled) {
   box-shadow: none;
+}
+
+.mat-toolbar,
+.mat-mdc-card,
+.mat-mdc-menu-panel,
+.mat-mdc-select-panel,
+.mat-mdc-autocomplete-panel {
+  box-shadow: var(--shadow-soft) !important;
+}
+
+.mat-toolbar {
+  box-shadow: var(--shadow-topbar) !important;
+}
+
+.mat-mdc-card {
+  border-radius: var(--radius-md) !important;
+}
+
+.mat-mdc-card .mdc-card__content,
+.mat-mdc-card-content {
+  font-size: 1rem;
+  line-height: 1.45;
+}
+
+.mat-mdc-form-field {
+  width: 100%;
+}
+
+.mat-mdc-text-field-wrapper {
+  background: white !important;
+}
+
+.mat-mdc-unelevated-button.mat-primary,
+.mat-mdc-raised-button.mat-primary {
+  --mdc-filled-button-container-color: var(--brand-primary);
+  --mdc-filled-button-label-text-color: #fff;
+}
+
+.mat-mdc-unelevated-button.mat-accent,
+.mat-mdc-raised-button.mat-accent {
+  --mdc-filled-button-container-color: var(--brand-accent);
+  --mdc-filled-button-label-text-color: #fff;
+}
+
+.mat-mdc-outlined-button {
+  border-radius: 8px;
+}
+
+.mat-mdc-button-base {
+  font-weight: 600;
+}
+
+.mat-icon {
+  vertical-align: middle;
+}
+
+.surface-list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.surface-list li {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 14px 0;
+  border-bottom: 1px solid var(--surface-border);
+}
+
+.admin-shell {
+  width: min(100%, var(--page-max));
+  margin: 0 auto;
+}
+
+.admin-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: end;
+  gap: 16px;
+  margin-bottom: 20px;
+}
+
+.admin-subtitle {
+  margin: 6px 0 0;
+  color: var(--text-muted);
+}
+
+.admin-table-wrap {
+  overflow: auto;
+  border-radius: var(--radius-md);
+  border: 1px solid var(--surface-border);
+  background: #fff;
+}
+
+.admin-table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.admin-table th,
+.admin-table td {
+  padding: 16px 18px;
+  text-align: left;
+  border-bottom: 1px solid var(--surface-border);
+  white-space: nowrap;
+}
+
+.admin-table th {
+  font-size: 0.75rem;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--text-muted);
+  background: #f8fafc;
+}
+
+.admin-table td p {
+  margin: 4px 0 0;
+  color: var(--text-muted);
+  white-space: normal;
+}
+
+.status-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 12px;
+  border-radius: 999px;
+  font-size: 0.78rem;
+  font-weight: 700;
+  text-transform: capitalize;
+}
+
+.status-pill.confirmed,
+.status-pill.on-sale {
+  background: rgba(0, 68, 137, 0.12);
+  color: var(--brand-primary);
+}
+
+.status-pill.pending,
+.status-pill.low-stock {
+  background: rgba(186, 28, 28, 0.12);
+  color: var(--brand-accent);
+}
+
+.status-pill.cancelled,
+.status-pill.sold-out {
+  background: rgba(37, 37, 37, 0.12);
+  color: var(--brand-ink);
+}
+
+.auth-page {
+  display: grid;
+  grid-template-columns: minmax(320px, 1fr) minmax(320px, 520px);
+  gap: 24px;
+  align-items: stretch;
+  padding-top: 28px;
+}
+
+.auth-showcase {
+  position: relative;
+  overflow: hidden;
+  color: white;
+  background:
+    linear-gradient(140deg, rgba(0, 68, 137, 0.92), rgba(37, 37, 37, 0.92)),
+    radial-gradient(circle at top right, rgba(186, 28, 28, 0.35), transparent 32%);
+}
+
+.auth-showcase::after {
+  content: '';
+  position: absolute;
+  inset: auto -40px -40px auto;
+  width: 220px;
+  height: 220px;
+  border-radius: 50%;
+  background: rgba(186, 28, 28, 0.18);
+  filter: blur(8px);
+}
+
+.auth-showcase .brand {
+  width: 76px;
+  height: 76px;
+  object-fit: contain;
+  margin-bottom: 24px;
+}
+
+.auth-showcase .lead {
+  max-width: 48ch;
+  color: rgba(255, 255, 255, 0.8);
+}
+
+.auth-feature-list {
+  margin-top: 28px;
+  display: grid;
+  gap: 14px;
+}
+
+.auth-feature-list li {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  color: rgba(255, 255, 255, 0.92);
+}
+
+.auth-card {
+  display: grid;
+  align-content: center;
+  gap: 18px;
+}
+
+.auth-form {
+  display: grid;
+  gap: 16px;
+}
+
+.auth-links {
+  display: flex;
+  justify-content: space-between;
+  gap: 16px;
+  color: var(--text-muted);
+}
+
+@media (max-width: 960px) {
+  .auth-page {
+    grid-template-columns: 1fr;
+  }
+
+  .auth-showcase {
+    min-height: 260px;
+  }
 }
 
 .success-toast {

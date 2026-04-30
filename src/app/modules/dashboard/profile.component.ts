@@ -11,8 +11,8 @@ import { MATERIAL_IMPORTS } from '../../shared/material/material-imports';
   imports: [CommonModule, ReactiveFormsModule, ...MATERIAL_IMPORTS],
   template: `
     <section class="panel-surface">
-      <p class="eyebrow">Profile</p>
-      <h1>Perfil de usuario</h1>
+      <p class="eyebrow">Administrador</p>
+      <h1>Perfil del administrador</h1>
 
       <form class="profile-form" [formGroup]="form" (ngSubmit)="submit()">
         <mat-form-field appearance="outline">
@@ -33,15 +33,6 @@ import { MATERIAL_IMPORTS } from '../../shared/material/material-imports';
         <mat-form-field appearance="outline">
           <mat-label>Ciudad</mat-label>
           <input matInput formControlName="city" />
-        </mat-form-field>
-
-        <mat-form-field appearance="outline">
-          <mat-label>Membresia</mat-label>
-          <mat-select formControlName="membershipTier">
-            <mat-option value="Core">Core</mat-option>
-            <mat-option value="Prime">Prime</mat-option>
-            <mat-option value="Elite">Elite</mat-option>
-          </mat-select>
         </mat-form-field>
 
         <button mat-flat-button type="submit">Guardar cambios</button>
@@ -76,8 +67,7 @@ export class ProfileComponent {
     fullName: ['', [Validators.required]],
     email: ['', [Validators.required, Validators.email]],
     phone: [''],
-    city: [''],
-    membershipTier: 'Core' as 'Core' | 'Prime' | 'Elite'
+    city: ['']
   });
 
   constructor() {

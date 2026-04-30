@@ -42,8 +42,9 @@ import { CurrencyGtqPipe } from '../../pipes/currency-gtq.pipe';
     `
       .event-card {
         overflow: hidden;
-        border-radius: 24px;
-        background: rgba(255, 255, 255, 0.86);
+        border-radius: var(--radius-md);
+        background: #fff;
+        box-shadow: var(--shadow-soft);
       }
 
       .media {
@@ -92,6 +93,7 @@ import { CurrencyGtqPipe } from '../../pipes/currency-gtq.pipe';
 
       .description {
         min-height: 52px;
+        color: var(--text-muted);
       }
 
       .on-sale {

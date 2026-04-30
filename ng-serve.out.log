@@ -1,0 +1,37 @@
+
+> sistema-tickets@0.0.0 start
+> ng serve --host 127.0.0.1 --port 4200
+
+[33m>[39m Building...
+[32m√[39m Building...
+[35mBrowser bundles[39m     
+[1mInitial chunk files[22m [2m | [22m[1mNames[22m           [2m | [22m [1mRaw size[22m
+[32mchunk-SNCUNUAX.js[39m   [2m | [22m[2m-[22m               [2m | [22m [36m27.24 kB[39m[2m | [22m
+[32mmain.js[39m             [2m | [22m[2mmain[22m            [2m | [22m [36m15.46 kB[39m[2m | [22m
+[32mstyles.css[39m          [2m | [22m[2mstyles[22m          [2m | [22m [36m13.48 kB[39m[2m | [22m
+
+[1m [22m                   [2m | [22m[1mInitial total[22m   [2m | [22m [1m56.18 kB[22m
+
+[1mLazy chunk files[22m    [2m | [22m[1mNames[22m           [2m | [22m [1mRaw size[22m
+[32mchunk-Y3RTIKH3.js[39m   [2m | [22m[2mdashboard-routes[22m[2m | [22m[36m145.38 kB[39m[2m | [22m
+[32mchunk-6GUCITNX.js[39m   [2m | [22m[2mauth-routes[22m     [2m | [22m [36m34.23 kB[39m[2m | [22m
+[32mchunk-K3BP2IVD.js[39m   [2m | [22m[2m-[22m               [2m | [22m [36m17.47 kB[39m[2m | [22m
+
+
+[35mServer bundles[39m      
+[1mInitial chunk files[22m [2m | [22m[1mNames[22m           [2m | [22m [1mRaw size[22m
+[32mpolyfills.server.mjs[39m[2m | [22m[2mpolyfills.server[22m[2m | [22m[36m427.81 kB[39m[2m | [22m
+[32mchunk-UY3RBIKS.mjs[39m  [2m | [22m[2m-[22m               [2m | [22m [36m27.27 kB[39m[2m | [22m
+[32mmain.server.mjs[39m     [2m | [22m[2mmain.server[22m     [2m | [22m [36m16.36 kB[39m[2m | [22m
+[32mserver.mjs[39m          [2m | [22m[2mserver[22m          [2m | [22m  [36m1.81 kB[39m[2m | [22m
+
+[1mLazy chunk files[22m    [2m | [22m[1mNames[22m           [2m | [22m [1mRaw size[22m
+[32mchunk-UGU3DVTS.mjs[39m  [2m | [22m[2mdashboard-routes[22m[2m | [22m[36m145.41 kB[39m[2m | [22m
+[32mchunk-HUPRTOKF.mjs[39m  [2m | [22m[2mauth-routes[22m     [2m | [22m [36m34.27 kB[39m[2m | [22m
+[32mchunk-5U543WLH.mjs[39m  [2m | [22m[2m-[22m               [2m | [22m [36m17.51 kB[39m[2m | [22m
+
+Application bundle generation complete. [5.546 seconds] - 2026-04-28T22:14:29.952Z
+
+Watch mode enabled. Watching for file changes...
+NOTE: Raw file sizes do not reflect development server per-request transformations.
+  [32m➜[39m  [1mLocal[22m:   [36mhttp://127.0.0.1:[1m4200[22m/[39m

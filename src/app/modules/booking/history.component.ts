@@ -9,63 +9,50 @@ import { CurrencyGtqPipe } from '../../shared/pipes/currency-gtq.pipe';
   standalone: true,
   imports: [CommonModule, AsyncPipe, DatePipe, CurrencyGtqPipe, ...MATERIAL_IMPORTS],
   template: `
-    <section class="page-shell">
-      <div class="section-header">
+    <section class="admin-shell">
+      <div class="admin-header">
         <div>
           <p class="eyebrow">Booking history</p>
           <h1>Historial de reservas</h1>
+          <p class="admin-subtitle">Vista tabular estilo admin para seguimiento de operaciones.</p>
         </div>
       </div>
 
-      <div class="history-grid">
-        <article class="panel-surface" *ngFor="let booking of bookings$ | async">
-          <div class="history-head">
-            <div>
-              <strong>{{ booking.eventName }}</strong>
-              <p>{{ booking.eventDate | date: 'd MMM y, h:mm a' }}</p>
-            </div>
-            <mat-chip>{{ booking.status }}</mat-chip>
-          </div>
-          <p>{{ booking.venueName }}</p>
-          <p>Orden {{ booking.orderNumber }}</p>
-          <p>Asientos: {{ booking.seats.length }}</p>
-          <strong>{{ booking.totals.total | currencyGtq }}</strong>
-        </article>
-      </div>
+      <article class="panel-surface">
+        <div class="admin-table-wrap">
+          <table class="admin-table">
+            <thead>
+              <tr>
+                <th>Evento</th>
+                <th>Orden</th>
+                <th>Fecha</th>
+                <th>Venue</th>
+                <th>Asientos</th>
+                <th>Estado</th>
+                <th>Total</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr *ngFor="let booking of bookings$ | async">
+                <td>
+                  <strong>{{ booking.eventName }}</strong>
+                  <p>{{ booking.paymentMethod }}</p>
+                </td>
+                <td>{{ booking.orderNumber }}</td>
+                <td>{{ booking.createdAt | date: 'd MMM y, h:mm a' }}</td>
+                <td>{{ booking.venueName }}</td>
+                <td>{{ booking.seats.length }}</td>
+                <td>
+                  <span class="status-pill" [class]="booking.status">{{ booking.status }}</span>
+                </td>
+                <td><strong>{{ booking.totals.total | currencyGtq }}</strong></td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </article>
     </section>
-  `,
-  styles: [
-    `
-      .history-grid {
-        display: grid;
-        grid-template-columns: repeat(3, minmax(0, 1fr));
-        gap: 20px;
-      }
-
-      .history-head {
-        display: flex;
-        justify-content: space-between;
-        gap: 16px;
-      }
-
-      .history-head p,
-      .history-grid p {
-        color: var(--text-muted);
-      }
-
-      @media (max-width: 1100px) {
-        .history-grid {
-          grid-template-columns: repeat(2, minmax(0, 1fr));
-        }
-      }
-
-      @media (max-width: 768px) {
-        .history-grid {
-          grid-template-columns: 1fr;
-        }
-      }
-    `
-  ]
+  `
 })
 export class HistoryComponent {
   private readonly booking = inject(BookingService);

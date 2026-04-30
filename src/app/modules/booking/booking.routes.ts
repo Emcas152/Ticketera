@@ -11,8 +11,8 @@ export const routes: Routes = [
     path: '',
     component: PublicLayout,
     children: [
-      { path: ':eventId/seats', component: SeatMapComponent, canActivate: [authGuard] },
-      { path: 'cart', component: CartComponent, canActivate: [authGuard] },
+      { path: ':eventId/seats', component: SeatMapComponent },
+      { path: 'cart', component: CartComponent },
       { path: 'confirm', component: ConfirmComponent, canActivate: [authGuard] },
       { path: 'history', component: HistoryComponent, canActivate: [authGuard] },
       { path: '', pathMatch: 'full', redirectTo: 'history' }

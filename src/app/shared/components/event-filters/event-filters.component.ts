@@ -1,3 +1,4 @@
+import { CommonModule } from '@angular/common';
 import { Component, EventEmitter, Input, OnChanges, Output, SimpleChanges, inject } from '@angular/core';
 import { NonNullableFormBuilder, ReactiveFormsModule } from '@angular/forms';
 import { debounceTime } from 'rxjs';
@@ -7,7 +8,7 @@ import { MATERIAL_IMPORTS } from '../../material/material-imports';
 @Component({
   selector: 'app-event-filters',
   standalone: true,
-  imports: [ReactiveFormsModule, ...MATERIAL_IMPORTS],
+  imports: [CommonModule, ReactiveFormsModule, ...MATERIAL_IMPORTS],
   template: `
     <section class="filters panel-surface" [formGroup]="form">
       <mat-form-field appearance="outline">

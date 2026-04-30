@@ -1,0 +1,4 @@
+[1m[31mERROR: Bad Request ("http://localhost:4200/checkout").
+URL with hostname "localhost" is not allowed.
+
+For more information, see https://angular.dev/best-practices/security#preventing-server-side-request-forgery-ssrf[39m[22m

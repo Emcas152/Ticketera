@@ -1,53 +1,38 @@
-import { AsyncPipe, CommonModule } from '@angular/common';
+import { CommonModule } from '@angular/common';
 import { Component, inject } from '@angular/core';
 import { Router, RouterLink, RouterLinkActive } from '@angular/router';
-import { map } from 'rxjs';
 import { AuthService } from '../../../core/services/auth.service';
-import { BookingService } from '../../../core/services/booking.service';
 import { MATERIAL_IMPORTS } from '../../material/material-imports';
 
 @Component({
   selector: 'app-navbar',
   standalone: true,
-  imports: [CommonModule, RouterLink, RouterLinkActive, AsyncPipe, ...MATERIAL_IMPORTS],
+  imports: [CommonModule, RouterLink, RouterLinkActive, ...MATERIAL_IMPORTS],
   template: `
     <header class="navbar-wrap">
       <mat-toolbar class="navbar panel-surface">
-        <a routerLink="/" class="brand">
-          <span class="brand-mark"></span>
+        <a routerLink="/dashboard" class="brand">
+          <img class="brand-logo" src="/assets/icons/icon-white-ui.png" alt="ALCON Productions" />
           <span>
-            <strong>Pulse Events</strong>
-            <small>Ticketing Platform</small>
+            <strong>ALCON Productions</strong>
+            <small>Admin portal</small>
           </span>
         </a>
 
-        <nav class="desktop-links">
-          <a routerLink="/" routerLinkActive="is-active" [routerLinkActiveOptions]="{ exact: true }">Inicio</a>
-          <a routerLink="/events" routerLinkActive="is-active">Eventos</a>
-          <a routerLink="/booking/history" routerLinkActive="is-active" *ngIf="auth.isLoggedIn()">Reservas</a>
-          <a routerLink="/dashboard" routerLinkActive="is-active" *ngIf="auth.isLoggedIn()">Dashboard</a>
+        <nav class="desktop-links" *ngIf="auth.isLoggedIn()">
+          <a routerLink="/dashboard" routerLinkActive="is-active" [routerLinkActiveOptions]="{ exact: true }">Resumen</a>
+          <a routerLink="/dashboard/tickets" routerLinkActive="is-active">Tickets</a>
+          <a routerLink="/dashboard/profile" routerLinkActive="is-active">Perfil</a>
         </nav>
 
         <div class="actions">
-          <a
-            mat-stroked-button
-            routerLink="/booking/cart"
-            class="cart-button"
-            [matBadge]="seatCount$ | async"
-            matBadgeColor="accent"
-            [matBadgeHidden]="(seatCount$ | async) === 0"
-          >
-            Carrito
-          </a>
-
           <ng-container *ngIf="auth.isLoggedIn(); else guestActions">
-            <a mat-flat-button routerLink="/dashboard">Mi cuenta</a>
-            <button mat-button type="button" (click)="logout()">Salir</button>
+            <a mat-flat-button routerLink="/dashboard" class="desktop-action">Panel</a>
+            <button mat-button type="button" (click)="logout()" class="desktop-action">Salir</button>
           </ng-container>
 
           <ng-template #guestActions>
-            <a mat-button routerLink="/auth/login">Ingresar</a>
-            <a mat-flat-button routerLink="/auth/register">Crear cuenta</a>
+            <a mat-flat-button routerLink="/auth/login" class="desktop-action">Acceso admin</a>
           </ng-template>
 
           <button mat-stroked-button [matMenuTriggerFor]="mobileMenu" class="mobile-trigger">Menu</button>
@@ -56,25 +41,37 @@ import { MATERIAL_IMPORTS } from '../../material/material-imports';
     </header>
 
     <mat-menu #mobileMenu="matMenu">
-      <a mat-menu-item routerLink="/">Inicio</a>
-      <a mat-menu-item routerLink="/events">Eventos</a>
-      <a mat-menu-item routerLink="/booking/cart">Carrito</a>
-      <a mat-menu-item routerLink="/dashboard" *ngIf="auth.isLoggedIn()">Dashboard</a>
-      <a mat-menu-item routerLink="/auth/login" *ngIf="!auth.isLoggedIn()">Ingresar</a>
-      <button mat-menu-item type="button" (click)="logout()" *ngIf="auth.isLoggedIn()">Salir</button>
+      <ng-container *ngIf="auth.isLoggedIn(); else guestMenu">
+        <a mat-menu-item routerLink="/dashboard">Resumen</a>
+        <a mat-menu-item routerLink="/dashboard/tickets">Tickets</a>
+        <a mat-menu-item routerLink="/dashboard/profile">Perfil</a>
+        <button mat-menu-item type="button" (click)="logout()">Salir</button>
+      </ng-container>
+
+      <ng-template #guestMenu>
+        <a mat-menu-item routerLink="/auth/login">Acceso admin</a>
+      </ng-template>
     </mat-menu>
   `,
   styles: [
     `
       .navbar-wrap {
-        padding: 16px 24px 0;
+        position: sticky;
+        top: 0;
+        z-index: 100;
+        padding: 0;
       }
 
       .navbar {
         display: flex;
         gap: 16px;
-        border-radius: 24px;
-        padding: 14px 18px;
+        border-radius: 0 !important;
+        padding: 0 28px;
+        height: 64px;
+        background: linear-gradient(90deg, #0a1628 0%, #0f2040 60%, #0d1a35 100%);
+        color: #fff;
+        border-bottom: 1px solid rgba(255,255,255,0.07);
+        box-shadow: 0 2px 16px rgba(0,0,0,0.28) !important;
       }
 
       .brand {
@@ -91,15 +88,14 @@ import { MATERIAL_IMPORTS } from '../../material/material-imports';
       }
 
       .brand small {
-        color: var(--text-muted);
+        color: rgba(255, 255, 255, 0.75);
       }
 
-      .brand-mark {
-        width: 18px;
-        height: 18px;
-        border-radius: 50%;
-        background: linear-gradient(135deg, var(--brand-primary), var(--brand-accent));
-        box-shadow: 0 0 0 8px rgba(15, 98, 254, 0.08);
+      .brand-logo {
+        width: 44px;
+        height: 44px;
+        object-fit: contain;
+        flex-shrink: 0;
       }
 
       .desktop-links,
@@ -109,18 +105,24 @@ import { MATERIAL_IMPORTS } from '../../material/material-imports';
         gap: 12px;
       }
 
-      .desktop-links {
+      .actions {
         margin-left: auto;
       }
 
       .desktop-links a {
-        color: var(--text-muted);
+        color: rgba(255, 255, 255, 0.78);
         text-decoration: none;
         font-weight: 600;
       }
 
       .desktop-links a.is-active {
-        color: var(--text-primary);
+        color: #fff;
+      }
+
+      .actions .mat-mdc-button,
+      .actions .mat-mdc-outlined-button,
+      .actions .mat-mdc-unelevated-button {
+        color: #fff;
       }
 
       .mobile-trigger {
@@ -128,13 +130,10 @@ import { MATERIAL_IMPORTS } from '../../material/material-imports';
       }
 
       @media (max-width: 1024px) {
-        .navbar-wrap {
-          padding: 16px 16px 0;
-        }
+        .navbar { padding: 0 16px; }
 
         .desktop-links,
-        .actions a:not(.cart-button),
-        .actions button:not(.mobile-trigger) {
+        .actions .desktop-action {
           display: none;
         }
 
@@ -142,8 +141,9 @@ import { MATERIAL_IMPORTS } from '../../material/material-imports';
           display: inline-flex;
         }
 
-        .actions {
-          margin-left: auto;
+        .brand-logo {
+          width: 38px;
+          height: 38px;
         }
       }
     `
@@ -151,12 +151,10 @@ import { MATERIAL_IMPORTS } from '../../material/material-imports';
 })
 export class NavbarComponent {
   readonly auth = inject(AuthService);
-  private readonly booking = inject(BookingService);
   private readonly router = inject(Router);
-  readonly seatCount$ = this.booking.cart$.pipe(map((cart) => cart.seats.length));
 
   logout(): void {
     this.auth.logout();
-    this.router.navigate(['/']);
+    this.router.navigate(['/auth/login']);
   }
 }

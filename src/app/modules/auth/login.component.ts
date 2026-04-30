@@ -10,62 +10,52 @@ import { MATERIAL_IMPORTS } from '../../shared/material/material-imports';
   standalone: true,
   imports: [CommonModule, ReactiveFormsModule, RouterLink, ...MATERIAL_IMPORTS],
   template: `
-    <section class="auth-shell page-shell">
+    <section class="auth-page page-shell">
+      <article class="auth-showcase panel-surface">
+        <img class="brand" src="/assets/icons/icon-white-ui.png" alt="ALCON Productions" />
+        <p class="eyebrow">Administrative access</p>
+        <h1>Controla eventos, tickets y operacion interna desde un solo panel.</h1>
+        <p class="lead">
+          Acceso restringido para administradores con autenticacion JWT, sesiones persistentes y visibilidad
+          centralizada de la operacion.
+        </p>
+
+        <ul class="surface-list auth-feature-list">
+          <li><span>Acceso seguro con JWT</span><mat-icon>verified_user</mat-icon></li>
+          <li><span>Seguimiento de tickets emitidos</span><mat-icon>confirmation_number</mat-icon></li>
+          <li><span>Panel interno de eventos</span><mat-icon>dashboard_customize</mat-icon></li>
+        </ul>
+      </article>
+
       <article class="auth-card panel-surface">
-        <p class="eyebrow">Access</p>
-        <h1>Iniciar sesion</h1>
-        <p class="auth-copy">Gestiona tus reservas, tickets y compras desde un solo workspace.</p>
+        <div>
+          <p class="eyebrow">Access</p>
+          <h1>Iniciar sesion</h1>
+          <p class="admin-subtitle">Ingresa con tus credenciales de administrador.</p>
+        </div>
 
         <form class="auth-form" [formGroup]="form" (ngSubmit)="submit()">
           <mat-form-field appearance="outline">
             <mat-label>Email</mat-label>
             <input matInput type="email" formControlName="email" />
+            <mat-icon matSuffix>mail</mat-icon>
           </mat-form-field>
 
           <mat-form-field appearance="outline">
             <mat-label>Contrasena</mat-label>
             <input matInput type="password" formControlName="password" />
+            <mat-icon matSuffix>lock</mat-icon>
           </mat-form-field>
 
-          <button mat-flat-button type="submit">Entrar</button>
+          <button mat-flat-button color="primary" type="submit">Entrar al administrador</button>
         </form>
 
         <div class="auth-links">
           <a routerLink="/auth/forgot-password">Recuperar contrasena</a>
-          <a routerLink="/auth/register">Crear cuenta</a>
         </div>
       </article>
     </section>
-  `,
-  styles: [
-    `
-      .auth-shell {
-        display: grid;
-        place-items: center;
-        padding-top: 32px;
-      }
-
-      .auth-card {
-        width: min(100%, 480px);
-      }
-
-      .auth-form {
-        display: grid;
-        gap: 16px;
-      }
-
-      .auth-copy,
-      .auth-links {
-        color: var(--text-muted);
-      }
-
-      .auth-links {
-        display: flex;
-        justify-content: space-between;
-        gap: 16px;
-      }
-    `
-  ]
+  `
 })
 export class LoginComponent {
   private readonly fb = inject(NonNullableFormBuilder);

@@ -3,7 +3,7 @@ import { authGuard } from '../../core/guards/auth.guard';
 import { DashboardLayout } from '../../layouts/dashboard-layout/dashboard-layout.component';
 import { OverviewComponent } from './overview.component';
 import { ProfileComponent } from './profile.component';
-import { PurchasesComponent } from './purchases.component';
+import { SeatMapBuilderComponent } from './seat-map-builder.component';
 import { TicketsComponent } from './tickets.component';
 
 export const routes: Routes = [
@@ -14,8 +14,8 @@ export const routes: Routes = [
     children: [
       { path: '', component: OverviewComponent },
       { path: 'tickets', component: TicketsComponent },
-      { path: 'purchases', component: PurchasesComponent },
-      { path: 'profile', component: ProfileComponent }
+      { path: 'profile', component: ProfileComponent },
+      { path: 'seat-map-builder', component: SeatMapBuilderComponent }
     ]
   }
 ];

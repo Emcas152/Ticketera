@@ -1,47 +1,267 @@
 import { BookingRecord } from '../models/booking.model';
 import { EventItem } from '../models/event.model';
-import { SeatMap, SeatStatus } from '../models/seat.model';
+import { Seat, SeatMap, SeatStatus, SeatTable } from '../models/seat.model';
 import { User } from '../models/user.model';
 
-const statusMatrix = (rowIndex: number, seatIndex: number): SeatStatus => {
-  if ((rowIndex + seatIndex) % 13 === 0) {
+const statusMatrix = (sectionId: string, tableIndex: number, seatIndex: number): SeatStatus => {
+  if (sectionId === 'general' && seatIndex % 5 === 0) {
     return 'sold';
   }
 
-  if ((rowIndex * 3 + seatIndex) % 9 === 0) {
+  if (sectionId === 'occupied' || (sectionId === 'vip' && (tableIndex + seatIndex) % 6 === 0)) {
     return 'reserved';
+  }
+
+  if (sectionId === 'vip' && seatIndex < 2 && tableIndex % 3 === 0) {
+    return 'available';
   }
 
   return 'available';
 };
 
-const createSeatMap = (eventId: string, basePrice: number, venueName: string): SeatMap => ({
-  eventId,
-  venueName,
-  stageLabel: 'Main Stage',
-  rows: Array.from({ length: 8 }, (_, rowIndex) => {
-    const rowLabel = String.fromCharCode(65 + rowIndex);
+interface SectionConfig {
+  id: string;
+  name: string;
+  color: string;
+  price: number;
+}
+
+interface TableBlueprint {
+  label: string;
+  sectionId: string;
+  x: number;
+  y: number;
+}
+
+const createTable = (
+  eventId: string,
+  section: SectionConfig,
+  blueprint: TableBlueprint,
+  tableIndex: number
+): SeatTable => {
+  const width = 72;
+  const height = 138;
+  const seatOffset = 34;
+  const seatSpacing = 28;
+  const radius = 13;
+  const seats: Seat[] = [];
+
+  for (let seatIndex = 0; seatIndex < 8; seatIndex++) {
+    const isLeft = seatIndex < 4;
+    const localIndex = seatIndex % 4;
+    const x = isLeft ? blueprint.x - seatOffset : blueprint.x + width + seatOffset;
+    const y = blueprint.y + 24 + localIndex * seatSpacing;
+    const number = seatIndex + 1;
+
+    seats.push({
+      id: `${eventId}-${section.id}-${blueprint.label}-${number}`,
+      row: blueprint.label,
+      number,
+      label: `Mesa ${blueprint.label} - Asiento ${number}`,
+      section: section.name,
+      sectionId: section.id,
+      tableId: `${section.id}-${blueprint.label}`,
+      tableLabel: blueprint.label,
+      price: section.price,
+      status: statusMatrix(section.id, tableIndex, seatIndex),
+      x,
+      y,
+      radius,
+      accessibility: seatIndex === 0 || seatIndex === 4
+    });
+  }
+
+  return {
+    id: `${section.id}-${blueprint.label}`,
+    label: blueprint.label,
+    sectionId: section.id,
+    sectionName: section.name,
+    x: blueprint.x,
+    y: blueprint.y,
+    width,
+    height,
+    seats
+  };
+};
+
+const createSeatMap = (eventId: string, basePrice: number, venueName: string): SeatMap => {
+  const sectionConfigs: SectionConfig[] = [
+    {
+      id: 'vip',
+      name: 'VIP',
+      color: '#65ff00',
+      price: basePrice + 550
+    },
+    {
+      id: 'general',
+      name: 'GENERAL',
+      color: '#49a7ff',
+      price: basePrice + 180
+    },
+    {
+      id: 'occupied',
+      name: 'OCUPADO',
+      color: '#ff4b4b',
+      price: basePrice + 180
+    }
+  ];
+
+  const tableBlueprints: TableBlueprint[] = [
+    { sectionId: 'occupied', label: '1', x: 110, y: 160 },
+    { sectionId: 'occupied', label: '2', x: 250, y: 160 },
+    { sectionId: 'occupied', label: '3', x: 390, y: 160 },
+    { sectionId: 'occupied', label: '4', x: 530, y: 160 },
+    { sectionId: 'occupied', label: '5', x: 670, y: 160 },
+    { sectionId: 'occupied', label: '6', x: 810, y: 160 },
+    { sectionId: 'vip', label: '7', x: 950, y: 160 },
+    { sectionId: 'vip', label: '58', x: 1080, y: 150 },
+    { sectionId: 'vip', label: '57', x: 1080, y: 250 },
+    { sectionId: 'occupied', label: '16', x: 110, y: 300 },
+    { sectionId: 'occupied', label: '15', x: 250, y: 300 },
+    { sectionId: 'occupied', label: '14', x: 390, y: 300 },
+    { sectionId: 'occupied', label: '13', x: 530, y: 300 },
+    { sectionId: 'occupied', label: '12', x: 670, y: 300 },
+    { sectionId: 'occupied', label: '11', x: 810, y: 300 },
+    { sectionId: 'occupied', label: '10', x: 950, y: 300 },
+    { sectionId: 'occupied', label: '17', x: 110, y: 470 },
+    { sectionId: 'occupied', label: '18', x: 250, y: 470 },
+    { sectionId: 'occupied', label: '19', x: 390, y: 470 },
+    { sectionId: 'occupied', label: '20', x: 530, y: 470 },
+    { sectionId: 'occupied', label: '21', x: 670, y: 470 },
+    { sectionId: 'occupied', label: '22', x: 810, y: 470 },
+    { sectionId: 'occupied', label: '23', x: 950, y: 470 },
+    { sectionId: 'occupied', label: '30', x: 110, y: 640 },
+    { sectionId: 'vip', label: '29', x: 250, y: 640 },
+    { sectionId: 'occupied', label: '28', x: 390, y: 640 },
+    { sectionId: 'occupied', label: '27', x: 530, y: 640 },
+    { sectionId: 'occupied', label: '26', x: 670, y: 640 },
+    { sectionId: 'occupied', label: '25', x: 810, y: 640 },
+    { sectionId: 'occupied', label: '24', x: 950, y: 640 },
+    { sectionId: 'occupied', label: '31', x: 330, y: 810 },
+    { sectionId: 'occupied', label: '32', x: 470, y: 810 },
+    { sectionId: 'occupied', label: '33', x: 610, y: 810 },
+    { sectionId: 'occupied', label: '34', x: 750, y: 810 },
+    { sectionId: 'occupied', label: '35', x: 890, y: 810 },
+    { sectionId: 'general', label: '40', x: 330, y: 980 },
+    { sectionId: 'occupied', label: '39', x: 470, y: 980 },
+    { sectionId: 'occupied', label: '38', x: 610, y: 980 },
+    { sectionId: 'general', label: '37', x: 750, y: 980 },
+    { sectionId: 'general', label: '36', x: 890, y: 980 },
+    { sectionId: 'occupied', label: '41', x: 330, y: 1140 },
+    { sectionId: 'general', label: '46', x: 180, y: 1380 },
+    { sectionId: 'general', label: '47', x: 320, y: 1380 },
+    { sectionId: 'general', label: '49', x: 180, y: 1550 },
+    { sectionId: 'general', label: '48', x: 320, y: 1550 },
+    { sectionId: 'general', label: '50', x: 180, y: 1720 }
+  ];
+
+  const tables = tableBlueprints.map((blueprint, tableIndex) => {
+    const section = sectionConfigs.find((item) => item.id === blueprint.sectionId)!;
+    return createTable(eventId, section, blueprint, tableIndex);
+  });
+
+  const sections = sectionConfigs.map((section) => {
+    const sectionTables = tables.filter((table) => table.sectionId === section.id);
+    const seats = sectionTables.flatMap((table) => table.seats);
+    const minX = Math.min(...sectionTables.map((table) => table.x - 58));
+    const maxX = Math.max(...sectionTables.map((table) => table.x + table.width + 58));
+    const minY = Math.min(...sectionTables.map((table) => table.y - 44));
+    const maxY = Math.max(...sectionTables.map((table) => table.y + table.height + 44));
+    const polygon = `${minX},${maxY} ${minX},${minY} ${maxX},${minY} ${maxX},${maxY}`;
 
     return {
-      label: rowLabel,
-      seats: Array.from({ length: 12 }, (_, seatIndex) => {
-        const number = seatIndex + 1;
-        const section = rowIndex < 2 ? 'Front' : rowIndex < 5 ? 'Premium' : 'General';
-
-        return {
-          id: `${eventId}-${rowLabel}-${number}`,
-          row: rowLabel,
-          number,
-          label: `${rowLabel}${number}`,
-          section,
-          price: basePrice + (rowIndex < 2 ? 180 : rowIndex < 5 ? 90 : 0),
-          status: statusMatrix(rowIndex, seatIndex),
-          accessibility: seatIndex === 0 || seatIndex === 11
-        };
-      })
+      id: section.id,
+      name: section.name,
+      color: section.color,
+      polygon,
+      labelX: (minX + maxX) / 2,
+      labelY: minY + 18,
+      seats,
+      priceFrom: section.price
     };
-  })
-});
+  });
+
+  return {
+    eventId,
+    venueName,
+    width: 1520,
+    height: 1880,
+    minScale: 0.42,
+    maxScale: 3.1,
+    stage: {
+      x: 160,
+      y: 36,
+      width: 920,
+      height: 120,
+      label: 'ESCENARIO',
+      subtitle: venueName,
+      theme: 'ornate'
+    },
+    sections,
+    tables,
+    lanes: [
+      {
+        id: 'vip-lane',
+        label: 'VIP',
+        x: 0,
+        y: 165,
+        width: 34,
+        height: 690,
+        fill: '#65ff00',
+        textColor: '#10210a'
+      },
+      {
+        id: 'general-lane',
+        label: 'GENERAL',
+        x: 0,
+        y: 900,
+        width: 34,
+        height: 870,
+        fill: '#49a7ff',
+        textColor: '#08223d'
+      }
+    ],
+    amenities: [
+      {
+        id: 'bathroom',
+        label: 'BAÑOS',
+        x: 1040,
+        y: 610,
+        width: 180,
+        height: 240,
+        fill: '#70727c',
+        textColor: '#ffffff'
+      }
+    ],
+    badges: [
+      { id: 'b53', label: '53', x: 54, y: 248, rotation: -28 },
+      { id: 'b54', label: '54', x: 54, y: 424, rotation: -28 },
+      { id: 'b55', label: '55', x: 54, y: 599, rotation: -28 },
+      { id: 'b56', label: '56', x: 54, y: 773, rotation: -28 },
+      { id: 'b42', label: '42', x: 495, y: 1268, rotation: 30 },
+      { id: 'b43', label: '43', x: 715, y: 1268, rotation: 18 },
+      { id: 'b44', label: '44', x: 920, y: 1268, rotation: 18 },
+      { id: 'b59', label: '59', x: 1220, y: 310, rotation: -40 },
+      { id: 'b60', label: '60', x: 1230, y: 185, rotation: -40 }
+    ],
+    poster: {
+      title: eventId === 'evt-rooftop-jazz' ? 'Rooftop Jazz' : 'Café Escenario',
+      subtitle: eventId === 'evt-rooftop-jazz' ? 'Live Session' : 'Music chill & Coffee',
+      lines: ['JUEVES', '12 FEBRERO', 'ABIERTO DESDE LAS 7PM', 'VIP: Q.150', 'GENERAL: Q.100'],
+      x: 1235,
+      y: 0,
+      width: 285,
+      height: 1880,
+      fill: '#8e0909'
+    },
+    entrance: {
+      label: 'INGRESO',
+      x: 845,
+      y: 1600,
+      direction: 'left'
+    }
+  };
+};
 
 export const MOCK_CURRENT_USER: User = {
   id: 'user-01',
@@ -66,7 +286,7 @@ export const MOCK_EVENTS: EventItem[] = [
     address: 'Zona 16, Guatemala City',
     image:
       'https://images.unsplash.com/photo-1493225457124-a3eb161ffa5f?auto=format&fit=crop&w=1200&q=80',
-    bannerColor: '#0f62fe',
+    bannerColor: '#004489',
     basePrice: 320,
     description:
       'Una noche de pop electronico con produccion inmersiva, hospitality premium y zonas por localidad disenadas para un flujo rapido de compra.',
@@ -98,7 +318,7 @@ export const MOCK_EVENTS: EventItem[] = [
     address: '5a Avenida Norte, Antigua Guatemala',
     image:
       'https://images.unsplash.com/photo-1511578314322-379afb476865?auto=format&fit=crop&w=1200&q=80',
-    bannerColor: '#1f6f5f',
+    bannerColor: '#004489',
     basePrice: 250,
     description:
       'Conferencia enfocada en producto digital, growth y automatizacion para equipos de alto rendimiento.',
@@ -130,7 +350,7 @@ export const MOCK_EVENTS: EventItem[] = [
     address: 'Zona 3, Quetzaltenango',
     image:
       'https://images.unsplash.com/photo-1501386761578-eac5c94b800a?auto=format&fit=crop&w=1200&q=80',
-    bannerColor: '#e76f51',
+    bannerColor: '#BA1C1C',
     basePrice: 180,
     description:
       'Sesion intima con cupo reducido, cocteleria de autor y visuales calidos para una experiencia boutique.',
@@ -162,7 +382,7 @@ export const MOCK_EVENTS: EventItem[] = [
     address: 'Zona 14, Guatemala City',
     image:
       'https://images.unsplash.com/photo-1414235077428-338989a2e8c0?auto=format&fit=crop&w=1200&q=80',
-    bannerColor: '#ff7f11',
+    bannerColor: '#BA1C1C',
     basePrice: 90,
     description:
       'Festival gastronomico con activaciones de marca, food trucks y tickets por franjas horarias.',
@@ -194,7 +414,7 @@ export const MOCK_EVENTS: EventItem[] = [
     address: 'Zona 4, Guatemala City',
     image:
       'https://images.unsplash.com/photo-1515169067868-5387ec356754?auto=format&fit=crop&w=1200&q=80',
-    bannerColor: '#264653',
+    bannerColor: '#004489',
     basePrice: 295,
     description:
       'Summit para equipos de UX/UI, branding y producto con workshops, keynote y networking guiado.',
@@ -226,7 +446,7 @@ export const MOCK_EVENTS: EventItem[] = [
     address: 'Centro Comercial Pacifico, Escuintla',
     image:
       'https://images.unsplash.com/photo-1489599849927-2ee91cede3ba?auto=format&fit=crop&w=1200&q=80',
-    bannerColor: '#6d597a',
+    bannerColor: '#BA1C1C',
     basePrice: 140,
     description:
       'Estreno exclusivo con seating numerado, experiencias VIP y emision de ticket digital con QR.',
@@ -261,29 +481,37 @@ export const MOCK_BOOKINGS: BookingRecord[] = [
     venueName: 'Foro Central',
     seats: [
       {
-        id: 'evt-neo-night-B-4',
-        row: 'B',
+        id: 'evt-neo-night-vip-VB-4',
+        row: 'VB',
         number: 4,
-        label: 'B4',
-        section: 'Premium',
-        price: 410,
-        status: 'selected'
+        label: 'VB4',
+        section: 'VIP Center',
+        sectionId: 'vip',
+        price: 560,
+        status: 'selected',
+        x: 560,
+        y: 226,
+        radius: 11
       },
       {
-        id: 'evt-neo-night-B-5',
-        row: 'B',
+        id: 'evt-neo-night-vip-VB-5',
+        row: 'VB',
         number: 5,
-        label: 'B5',
-        section: 'Premium',
-        price: 410,
-        status: 'selected'
+        label: 'VB5',
+        section: 'VIP Center',
+        sectionId: 'vip',
+        price: 560,
+        status: 'selected',
+        x: 588,
+        y: 226,
+        radius: 11
       }
     ],
     totals: {
-      subtotal: 820,
-      serviceFee: 74,
-      taxes: 42,
-      total: 936
+      subtotal: 1120,
+      serviceFee: 101,
+      taxes: 56,
+      total: 1277
     },
     createdAt: '2026-03-01T18:25:00.000Z',
     paymentMethod: 'Visa ending in 4421',

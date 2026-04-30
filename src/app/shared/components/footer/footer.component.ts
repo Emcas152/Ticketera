@@ -5,8 +5,9 @@ import { Component } from '@angular/core';
   standalone: true,
   template: `
     <footer class="footer panel-surface">
-      <div>
-        <strong>Pulse Events</strong>
+      <div class="footer-brand">
+        <img src="/assets/icons/alcon-bluered-ui.png" alt="ALCON Productions" />
+        <strong>ALCON Productions</strong>
         <p>Plataforma escalable para exploracion, compra y gestion de tickets.</p>
       </div>
       <div class="footer-links">
@@ -14,7 +15,7 @@ import { Component } from '@angular/core';
         <span>JWT auth</span>
         <span>Responsive UI</span>
       </div>
-      <small>© {{ year }} Pulse Events. Frontend listo para integrarse con API REST.</small>
+      <small>© {{ year }} ALCON Productions. Frontend listo para integrarse con API REST.</small>
     </footer>
   `,
   styles: [
@@ -23,12 +24,25 @@ import { Component } from '@angular/core';
         display: grid;
         gap: 16px;
         margin: 0 24px 24px;
+        border-left: 5px solid var(--brand-primary);
       }
 
       .footer p,
       .footer small {
         margin: 0;
         color: var(--text-muted);
+      }
+
+      .footer-brand {
+        display: grid;
+        gap: 8px;
+      }
+
+      .footer-brand img {
+        width: 220px;
+        max-width: 100%;
+        height: auto;
+        object-fit: contain;
       }
 
       .footer-links {
