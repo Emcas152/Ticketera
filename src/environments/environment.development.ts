@@ -1,7 +1,7 @@
 export const environment = {
   production: false,
   appName: 'ALCON Productions',
-  apiBaseUrl: 'https://api.example.com/v1',
-  useMocks: true,
+  apiBaseUrl: 'http://127.0.0.1:8000/api',
+  useMocks: false,
   defaultLocale: 'es-GT'
 };

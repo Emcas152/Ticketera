@@ -516,6 +516,6 @@ export const MOCK_BOOKINGS: BookingRecord[] = [
     createdAt: '2026-03-01T18:25:00.000Z',
     paymentMethod: 'Visa ending in 4421',
     status: 'confirmed',
-    qrCode: 'QR-PLS-240801'
+    qrCode: 'ALCON-TICKET:v1:demo_7mK8rB0wJ5cN2qT6xY9zA3dE4fG1hL8p'
   }
 ];

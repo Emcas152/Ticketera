@@ -137,6 +137,7 @@ export class SeatMapComponent {
       .subscribe((event) => {
         this.event = event;
         if (!event) return;
+        this.booking.setActiveEvent(event.id, event);
         this.booking.getSeatMap(event.id).pipe(takeUntilDestroyed(this.destroyRef)).subscribe((seatMap) => {
           this.seatMap = seatMap;
           this.activeSectionId = this.selectableSections[0]?.id ?? null;

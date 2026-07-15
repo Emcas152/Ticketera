@@ -16,13 +16,11 @@ import { MATERIAL_IMPORTS } from '../../shared/material/material-imports';
         <p class="eyebrow">Administrative access</p>
         <h1>Controla eventos, tickets y operacion interna desde un solo panel.</h1>
         <p class="lead">
-          Acceso restringido para administradores con autenticacion JWT, sesiones persistentes y visibilidad
-          centralizada de la operacion.
+          Acceso restringido para administradores.
         </p>
 
         <ul class="surface-list auth-feature-list">
-          <li><span>Acceso seguro con JWT</span><mat-icon>verified_user</mat-icon></li>
-          <li><span>Seguimiento de tickets emitidos</span><mat-icon>confirmation_number</mat-icon></li>
+         
           <li><span>Panel interno de eventos</span><mat-icon>dashboard_customize</mat-icon></li>
         </ul>
       </article>

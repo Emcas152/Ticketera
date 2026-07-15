@@ -41,6 +41,14 @@ import { MATERIAL_IMPORTS } from '../../shared/material/material-imports';
               <mat-icon>confirmation_number</mat-icon>
               <span>Tickets</span>
             </a>
+            <a routerLink="/dashboard/ventas-efectivo" routerLinkActive="is-active">
+              <mat-icon>point_of_sale</mat-icon>
+              <span>Ventas en efectivo</span>
+            </a>
+            <a routerLink="/dashboard/validar" routerLinkActive="is-active">
+              <mat-icon>qr_code_scanner</mat-icon>
+              <span>Validar QR</span>
+            </a>
             <a routerLink="/dashboard/profile" routerLinkActive="is-active">
               <mat-icon>person</mat-icon>
               <span>Perfil</span>
@@ -51,6 +59,14 @@ import { MATERIAL_IMPORTS } from '../../shared/material/material-imports';
         <div class="nav-group">
           <p class="nav-label">Herramientas</p>
           <nav class="dashboard-links">
+            <a routerLink="/dashboard/eventos" routerLinkActive="is-active">
+              <mat-icon>event_note</mat-icon>
+              <span>Eventos</span>
+            </a>
+            <a routerLink="/dashboard/venues" routerLinkActive="is-active">
+              <mat-icon>location_on</mat-icon>
+              <span>Ubicaciones</span>
+            </a>
             <a routerLink="/dashboard/seat-map-builder" routerLinkActive="is-active">
               <mat-icon>table_restaurant</mat-icon>
               <span>Mapa de Asientos</span>

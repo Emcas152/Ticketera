@@ -12,7 +12,7 @@ export class TicketPdfService {
       format: 'a4'
     });
 
-    const qrValue = this.buildQrPayload(booking);
+    const qrValue = booking.qrCode;
     const qrImage = await QRCode.toDataURL(qrValue, {
       errorCorrectionLevel: 'M',
       margin: 1,
@@ -96,7 +96,7 @@ export class TicketPdfService {
     pdf.setFontSize(10);
     pdf.setTextColor(100, 116, 139);
     pdf.text(
-      'Presenta este PDF o escanea el QR en el acceso. Cada ticket corresponde a los asientos asignados en esta reserva.',
+      'Presenta este PDF en el acceso. El QR solo contiene un token seguro y debe validarse desde el sistema interno.',
       28,
       214,
       { maxWidth: 145 }
@@ -107,27 +107,9 @@ export class TicketPdfService {
     pdf.setFontSize(9);
     pdf.text(`Reserva: ${booking.id}`, 28, 238);
     pdf.text(`Estado: ${booking.status}`, 28, 244);
-    pdf.text(`Payload QR: ${qrValue}`, 28, 252, { maxWidth: 145 });
+    pdf.text(`Token QR: ${qrValue}`, 28, 252, { maxWidth: 145 });
 
     pdf.save(`${booking.orderNumber}.pdf`);
-  }
-
-  private buildQrPayload(booking: BookingRecord): string {
-    return JSON.stringify({
-      bookingId: booking.id,
-      orderNumber: booking.orderNumber,
-      eventId: booking.eventId,
-      eventName: booking.eventName,
-      qrCode: booking.qrCode,
-      seats: booking.seats.map((seat) => ({
-        id: seat.id,
-        label: seat.label,
-        section: seat.section,
-        table: seat.tableLabel ?? seat.row,
-        number: seat.number
-      })),
-      total: booking.totals.total
-    });
   }
 
   private formatDate(value: string): string {

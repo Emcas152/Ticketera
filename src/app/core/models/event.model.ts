@@ -28,7 +28,7 @@ export interface EventItem {
   description: string;
   shortDescription: string;
   featured: boolean;
-  status: 'on-sale' | 'low-stock' | 'sold-out';
+  status: 'draft' | 'on-sale' | 'low-stock' | 'sold-out';
   tags: string[];
   metrics: EventMetrics;
   priceTiers: EventPriceTier[];

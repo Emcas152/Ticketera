@@ -28,6 +28,7 @@ import { CurrencyGtqPipe } from '../../shared/pipes/currency-gtq.pipe';
                 <th>Evento</th>
                 <th>Fecha</th>
                 <th>QR</th>
+                <th>Estado</th>
                 <th>Asientos</th>
                 <th>Total</th>
                 <th>Accion</th>
@@ -41,6 +42,7 @@ import { CurrencyGtqPipe } from '../../shared/pipes/currency-gtq.pipe';
                 </td>
                 <td>{{ booking.eventDate | date: 'EEEE, d MMM y' }}</td>
                 <td>{{ booking.qrCode }}</td>
+                <td>{{ statusLabel(booking) }}</td>
                 <td>{{ seatLabels(booking) }}</td>
                 <td><strong>{{ booking.totals.total | currencyGtq }}</strong></td>
                 <td>
@@ -63,6 +65,13 @@ export class TicketsComponent {
 
   seatLabels(booking: BookingRecord): string {
     return booking.seats.map((seat) => seat.label).join(', ');
+  }
+
+  statusLabel(booking: BookingRecord): string {
+    if (booking.status === 'used') return 'Usado';
+    if (booking.status === 'cancelled') return 'Cancelado';
+    if (booking.status === 'pending') return 'Pendiente';
+    return 'Activo';
   }
 
   async downloadTicket(booking: BookingRecord): Promise<void> {

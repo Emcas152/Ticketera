@@ -32,6 +32,7 @@ export interface BookingRecord {
   totals: BookingTotals;
   createdAt: string;
   paymentMethod: string;
-  status: 'confirmed' | 'pending' | 'cancelled';
+  status: 'confirmed' | 'pending' | 'cancelled' | 'used';
   qrCode: string;
+  usedAt?: string | null;
 }

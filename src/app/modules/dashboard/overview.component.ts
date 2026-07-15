@@ -2,408 +2,605 @@ import { AsyncPipe, CommonModule, DatePipe } from '@angular/common';
 import { Component, inject } from '@angular/core';
 import { RouterLink } from '@angular/router';
 import { combineLatest, map } from 'rxjs';
+import { BookingRecord } from '../../core/models/booking.model';
 import { EventItem } from '../../core/models/event.model';
 import { AuthService } from '../../core/services/auth.service';
 import { BookingService } from '../../core/services/booking.service';
 import { EventService } from '../../core/services/event.service';
 import { MATERIAL_IMPORTS } from '../../shared/material/material-imports';
+import { CurrencyGtqPipe } from '../../shared/pipes/currency-gtq.pipe';
+
+interface MetricCard {
+  label: string;
+  value: string;
+  detail: string;
+  icon: string;
+}
+
+interface ChartPoint {
+  label: string;
+  value: number;
+  display: string;
+  percent: number;
+}
+
+interface EventSalesRow {
+  event: EventItem;
+  sold: number;
+  available: number;
+  revenue: number;
+  progress: number;
+}
+
+interface SalesDashboardVm {
+  metrics: MetricCard[];
+  dailySales: ChartPoint[];
+  paymentMethods: ChartPoint[];
+  eventRows: EventSalesRow[];
+  recentBookings: BookingRecord[];
+  totalRevenue: number;
+  cashRevenue: number;
+  cardRevenue: number;
+}
 
 @Component({
   selector: 'app-overview',
   standalone: true,
-  imports: [CommonModule, AsyncPipe, DatePipe, RouterLink, ...MATERIAL_IMPORTS],
+  imports: [CommonModule, AsyncPipe, DatePipe, RouterLink, CurrencyGtqPipe, ...MATERIAL_IMPORTS],
   template: `
-    <div class="overview-root">
-
-      <!-- ── Hero Banner ── -->
-      <div class="hero-banner">
-        <div class="hero-deco"></div>
-
-        <div class="hero-left">
-          <span class="hero-badge">Admin Portal</span>
-          <h1 class="hero-name">{{ (user$ | async)?.fullName }}</h1>
-          <p class="hero-sub">Panel operacional &mdash; ALCON Productions</p>
-          <div class="hero-ctas">
-            <a mat-flat-button routerLink="/dashboard/seat-map-builder" class="cta-primary">
-              <mat-icon>table_restaurant</mat-icon>
-              Crear mapa de asientos
-            </a>
-            <a mat-stroked-button routerLink="/events" class="cta-ghost">Ver eventos</a>
-          </div>
+    <section class="sales-dashboard">
+      <div class="sales-hero">
+        <div>
+          <p class="eyebrow">Dashboard general</p>
+          <h1>Ventas y entradas</h1>
+          <p>Resumen operativo para ingresos, disponibilidad, ventas por dia y metodos de pago.</p>
         </div>
-
-        <div class="hero-metrics">
-          @for (stat of (stats$ | async) ?? []; track stat.label) {
-            <div class="hm-card">
-              <strong class="hm-value">{{ stat.value }}</strong>
-              <span class="hm-label">{{ stat.label }}</span>
-            </div>
-          }
+        <div class="hero-actions">
+          <a mat-flat-button color="primary" routerLink="/dashboard/ventas-efectivo">
+            <mat-icon>point_of_sale</mat-icon>
+            Venta en efectivo
+          </a>
+          <a mat-stroked-button routerLink="/dashboard/eventos">
+            <mat-icon>event_note</mat-icon>
+            Gestionar eventos
+          </a>
         </div>
       </div>
 
-      <!-- ── Events under tracking ── -->
-      <section class="events-section">
-        <div class="section-head">
-          <div>
-            <p class="eyebrow">Operación</p>
-            <h2>Eventos bajo seguimiento</h2>
-          </div>
-          <a mat-stroked-button routerLink="/events">Ver todos</a>
-        </div>
-
-        <div class="events-grid">
-          @for (event of (featuredEvents$ | async) ?? []; track event.id) {
-            <article class="event-tile panel-surface">
-              <div class="tile-header">
-                <span class="category-label">{{ event.category }}</span>
-                <span class="status-tag" [class]="event.status">{{ statusLabel(event) }}</span>
+      <ng-container *ngIf="vm$ | async as vm">
+        <div class="metric-grid">
+          @for (metric of vm.metrics; track metric.label) {
+            <article class="metric-card">
+              <div class="metric-icon">
+                <mat-icon>{{ metric.icon }}</mat-icon>
               </div>
-              <h3>{{ event.name }}</h3>
-              <p class="tile-meta">
-                {{ event.date | date: 'EEE d MMM' }} &bull; {{ event.venueName }} &bull; {{ event.city }}
-              </p>
-              <p class="tile-desc">{{ event.shortDescription }}</p>
-              <div class="tile-kpis">
-                <div class="kpi">
-                  <strong>{{ event.metrics.interested | number }}</strong>
-                  <span>Interesados</span>
-                </div>
-                <div class="kpi">
-                  <strong>{{ event.metrics.ticketsLeft }}</strong>
-                  <span>Disponibles</span>
-                </div>
-                <div class="kpi">
-                  <strong>{{ event.metrics.rating }}</strong>
-                  <span>Rating</span>
-                </div>
+              <div>
+                <span>{{ metric.label }}</span>
+                <strong>{{ metric.value }}</strong>
+                <p>{{ metric.detail }}</p>
               </div>
             </article>
           }
         </div>
-      </section>
 
-      <!-- ── Admin tools ── -->
-      <section class="tools-section">
-        <p class="eyebrow" style="margin-bottom: 14px;">Herramientas administrativas</p>
-        <div class="tools-grid">
-          <a class="tool-card panel-surface" routerLink="/dashboard/seat-map-builder">
-            <div class="tool-icon">
-              <mat-icon>table_restaurant</mat-icon>
+        <div class="dashboard-grid">
+          <article class="panel-surface chart-card">
+            <div class="card-head">
+              <div>
+                <p class="eyebrow">Grafica</p>
+                <h2>Ventas por dia</h2>
+              </div>
+              <span>{{ vm.dailySales.length }} dias</span>
             </div>
-            <div class="tool-text">
-              <strong>Crear Mapa de Asientos</strong>
-              <p>Configura secciones y mesas para cualquier evento.</p>
+
+            <div class="bar-chart daily">
+              @for (point of vm.dailySales; track point.label) {
+                <div class="bar-item">
+                  <div class="bar-track">
+                    <span [style.height.%]="point.percent"></span>
+                  </div>
+                  <strong>{{ point.display }}</strong>
+                  <small>{{ point.label }}</small>
+                </div>
+              }
             </div>
-            <mat-icon class="tool-arrow">arrow_forward</mat-icon>
-          </a>
-          <a class="tool-card panel-surface" routerLink="/dashboard/tickets">
-            <div class="tool-icon">
-              <mat-icon>confirmation_number</mat-icon>
+          </article>
+
+          <article class="panel-surface chart-card">
+            <div class="card-head">
+              <div>
+                <p class="eyebrow">Grafica</p>
+                <h2>Ingresos por pago</h2>
+              </div>
+              <span>{{ vm.totalRevenue | currencyGtq }}</span>
             </div>
-            <div class="tool-text">
-              <strong>Tickets Emitidos</strong>
-              <p>Revisa y gestiona todos los tickets del sistema.</p>
+
+            <div class="payment-list">
+              @for (point of vm.paymentMethods; track point.label) {
+                <div class="payment-row">
+                  <div class="payment-label">
+                    <strong>{{ point.label }}</strong>
+                    <span>{{ point.display }}</span>
+                  </div>
+                  <div class="progress-track">
+                    <span [style.width.%]="point.percent"></span>
+                  </div>
+                  <small>{{ point.percent | number: '1.0-0' }}%</small>
+                </div>
+              }
             </div>
-            <mat-icon class="tool-arrow">arrow_forward</mat-icon>
-          </a>
+          </article>
+
+          <article class="panel-surface split-card">
+            <div class="card-head">
+              <div>
+                <p class="eyebrow">Composicion</p>
+                <h2>Canales de ingreso</h2>
+              </div>
+            </div>
+            <div class="split-values">
+              <div>
+                <span>Tarjeta</span>
+                <strong>{{ vm.cardRevenue | currencyGtq }}</strong>
+              </div>
+              <div>
+                <span>Efectivo</span>
+                <strong>{{ vm.cashRevenue | currencyGtq }}</strong>
+              </div>
+            </div>
+          </article>
+
+          <article class="panel-surface events-card">
+            <div class="card-head">
+              <div>
+                <p class="eyebrow">Eventos</p>
+                <h2>Ventas por evento</h2>
+              </div>
+              <a mat-stroked-button routerLink="/dashboard/eventos">Administrar</a>
+            </div>
+
+            <div class="event-sales-list">
+              @for (row of vm.eventRows; track row.event.id) {
+                <div class="event-sales-row">
+                  <div class="event-title">
+                    <strong>{{ row.event.name }}</strong>
+                    <span>{{ row.sold }} vendidas · {{ row.available }} disponibles</span>
+                  </div>
+                  <div class="event-progress">
+                    <span [style.width.%]="row.progress"></span>
+                  </div>
+                  <strong>{{ row.revenue | currencyGtq }}</strong>
+                </div>
+              }
+            </div>
+          </article>
+
+          <article class="panel-surface recent-card">
+            <div class="card-head">
+              <div>
+                <p class="eyebrow">Actividad</p>
+                <h2>Ultimas ventas</h2>
+              </div>
+              <a mat-stroked-button routerLink="/dashboard/tickets">Ver tickets</a>
+            </div>
+
+            <div class="recent-list">
+              @for (booking of vm.recentBookings; track booking.id) {
+                <div class="recent-row">
+                  <div>
+                    <strong>{{ booking.eventName }}</strong>
+                    <p>{{ booking.createdAt | date: 'd MMM, h:mm a' }} · {{ booking.paymentMethod }}</p>
+                  </div>
+                  <span>{{ booking.totals.total | currencyGtq }}</span>
+                </div>
+              }
+            </div>
+          </article>
         </div>
-      </section>
-
-    </div>
+      </ng-container>
+    </section>
   `,
   styles: [`
-    .overview-root {
+    .sales-dashboard {
       display: grid;
-      gap: 28px;
+      gap: 22px;
+      width: min(100%, var(--page-max));
+      margin: 0 auto;
     }
 
-    /* ────────────────────────────────
-       Hero Banner
-    ──────────────────────────────── */
-    .hero-banner {
-      position: relative;
+    .sales-hero {
       display: flex;
-      justify-content: space-between;
       align-items: center;
-      gap: 32px;
-      padding: 40px 48px;
-      border-radius: 20px;
-      background: linear-gradient(135deg, #07111f 0%, #0f2240 45%, #0d1e38 100%);
+      justify-content: space-between;
+      gap: 20px;
+      padding: 28px;
+      border-radius: 18px;
+      background:
+        linear-gradient(135deg, rgba(0, 68, 137, 0.95), rgba(18, 31, 52, 0.98)),
+        url('https://images.unsplash.com/photo-1514525253161-7a46d19cd819?auto=format&fit=crop&w=1600&q=80');
+      background-size: cover;
+      background-position: center;
       color: #fff;
       overflow: hidden;
     }
 
-    /* Decorative glow blob */
-    .hero-deco {
-      position: absolute;
-      top: -80px;
-      right: -80px;
-      width: 360px;
-      height: 360px;
-      border-radius: 50%;
-      background: radial-gradient(circle, rgba(0, 102, 204, 0.22) 0%, transparent 65%);
-      pointer-events: none;
-    }
-
-    /* Left: greeting */
-    .hero-left {
-      position: relative;
-      z-index: 1;
-      display: grid;
-      gap: 14px;
-      max-width: 440px;
-    }
-
-    .hero-badge {
-      display: inline-flex;
-      align-items: center;
-      gap: 6px;
-      padding: 4px 12px;
-      border-radius: 999px;
-      background: rgba(255, 255, 255, 0.08);
-      border: 1px solid rgba(255, 255, 255, 0.12);
-      font-size: 0.68rem;
-      letter-spacing: 0.14em;
-      text-transform: uppercase;
-      color: rgba(255, 255, 255, 0.7);
-      width: fit-content;
-    }
-
-    .hero-name {
-      font-size: 2.4rem;
-      color: #fff;
-      margin: 0;
-      line-height: 1.1;
-      letter-spacing: 0.01em;
-    }
-
-    .hero-sub {
-      margin: 0;
-      font-size: 0.9rem;
-      color: rgba(255, 255, 255, 0.45);
-      letter-spacing: 0.02em;
-    }
-
-    .hero-ctas {
-      display: flex;
-      gap: 12px;
-      flex-wrap: wrap;
-    }
-
-    .cta-primary {
-      background: rgba(255, 255, 255, 0.14) !important;
-      color: #fff !important;
-      border: 1px solid rgba(255, 255, 255, 0.2) !important;
-      border-radius: 8px !important;
-      font-weight: 600 !important;
-    }
-
-    .cta-primary:hover {
-      background: rgba(255, 255, 255, 0.22) !important;
-    }
-
-    .cta-ghost {
-      color: rgba(255, 255, 255, 0.65) !important;
-      border-color: rgba(255, 255, 255, 0.15) !important;
-      border-radius: 8px !important;
-    }
-
-    /* Right: inline metrics */
-    .hero-metrics {
-      position: relative;
-      z-index: 1;
-      display: grid;
-      grid-template-columns: repeat(2, 1fr);
-      gap: 12px;
-      flex-shrink: 0;
-      min-width: 340px;
-    }
-
-    .hm-card {
-      padding: 18px 20px;
-      border-radius: 14px;
-      background: rgba(255, 255, 255, 0.06);
-      border: 1px solid rgba(255, 255, 255, 0.08);
-      backdrop-filter: blur(4px);
-    }
-
-    .hm-value {
-      display: block;
-      font-size: 2rem;
-      font-family: 'Bahnschrift', 'Arial Narrow', 'Segoe UI', sans-serif;
-      color: #fff;
+    .sales-hero h1 {
+      font-size: clamp(2rem, 4vw, 3.25rem);
       line-height: 1;
-      margin-bottom: 6px;
     }
 
-    .hm-label {
-      font-size: 0.7rem;
-      color: rgba(255, 255, 255, 0.45);
-      text-transform: uppercase;
-      letter-spacing: 0.08em;
+    .sales-hero p {
+      max-width: 620px;
+      margin: 8px 0 0;
+      color: rgba(255, 255, 255, 0.78);
     }
 
-    /* ────────────────────────────────
-       Events
-    ──────────────────────────────── */
-    .events-section,
-    .tools-section {
-      display: grid;
-      gap: 16px;
-    }
-
-    .section-head {
+    .hero-actions {
       display: flex;
-      justify-content: space-between;
-      align-items: center;
-      gap: 16px;
+      gap: 10px;
+      flex-wrap: wrap;
+      justify-content: flex-end;
     }
 
-    .events-grid {
+    .metric-grid {
       display: grid;
-      grid-template-columns: repeat(3, 1fr);
-      gap: 20px;
+      grid-template-columns: repeat(4, minmax(0, 1fr));
+      gap: 14px;
     }
 
-    .event-tile {
-      display: grid;
-      gap: 12px;
-    }
-
-    .tile-header {
+    .metric-card {
       display: flex;
-      align-items: center;
-      justify-content: space-between;
-      gap: 8px;
+      gap: 14px;
+      min-height: 118px;
+      padding: 20px;
+      border: 1px solid var(--surface-border);
+      border-radius: 16px;
+      background: #fff;
+      box-shadow: var(--shadow-soft);
     }
 
-    .category-label {
-      font-size: 0.68rem;
-      text-transform: uppercase;
-      letter-spacing: 0.1em;
-      color: var(--text-muted);
-      font-weight: 600;
-    }
-
-    .status-tag {
-      display: inline-flex;
-      align-items: center;
-      padding: 3px 10px;
-      border-radius: 999px;
-      font-size: 0.7rem;
-      font-weight: 700;
-    }
-
-    .status-tag.on-sale   { background: rgba(0,68,137,0.09);   color: var(--brand-primary); }
-    .status-tag.low-stock { background: rgba(186,28,28,0.09);  color: var(--brand-accent);  }
-    .status-tag.sold-out  { background: rgba(37,37,37,0.09);   color: var(--brand-ink);     }
-
-    .event-tile h3   { font-size: 0.98rem; line-height: 1.3; }
-
-    .tile-meta,
-    .tile-desc {
-      margin: 0;
-      font-size: 0.83rem;
-      color: var(--text-muted);
-      line-height: 1.5;
-    }
-
-    .tile-kpis {
-      display: flex;
-      gap: 20px;
-      padding-top: 14px;
-      border-top: 1px solid var(--surface-border);
-    }
-
-    .kpi          { display: grid; gap: 3px; }
-    .kpi strong   { font-size: 1.05rem; }
-    .kpi span     { font-size: 0.72rem; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.06em; }
-
-    /* ────────────────────────────────
-       Tools
-    ──────────────────────────────── */
-    .tools-grid {
-      display: grid;
-      grid-template-columns: repeat(2, 1fr);
-      gap: 16px;
-    }
-
-    .tool-card {
-      display: flex;
-      align-items: center;
-      gap: 16px;
-      text-decoration: none;
-      color: inherit;
-      transition: box-shadow 0.2s ease, transform 0.18s ease;
-    }
-
-    .tool-card:hover {
-      box-shadow: 0 10px 28px rgba(0,0,0,0.1);
-      transform: translateY(-2px);
-    }
-
-    .tool-icon {
+    .metric-icon {
       display: grid;
       place-items: center;
-      width: 46px;
-      height: 46px;
+      width: 44px;
+      height: 44px;
       border-radius: 12px;
-      background: rgba(0,68,137,0.07);
-      flex-shrink: 0;
+      background: rgba(0, 68, 137, 0.1);
+      color: var(--brand-primary);
+      flex: 0 0 auto;
     }
 
-    .tool-icon mat-icon { color: var(--brand-primary); }
-
-    .tool-text        { flex: 1; }
-    .tool-text strong { display: block; font-size: 0.95rem; margin-bottom: 4px; }
-    .tool-text p      { margin: 0; font-size: 0.82rem; color: var(--text-muted); }
-    .tool-arrow       { color: var(--text-muted); flex-shrink: 0; }
-
-    /* ────────────────────────────────
-       Responsive
-    ──────────────────────────────── */
-    @media (max-width: 1200px) {
-      .hero-banner  { flex-direction: column; align-items: flex-start; }
-      .hero-metrics { min-width: unset; width: 100%; }
-      .events-grid  { grid-template-columns: repeat(2, 1fr); }
+    .metric-card span,
+    .card-head span,
+    .recent-row p,
+    .event-title span {
+      color: var(--text-muted);
+      font-size: 0.85rem;
     }
 
-    @media (max-width: 768px) {
-      .hero-banner   { padding: 28px 24px; }
-      .hero-name     { font-size: 1.8rem; }
-      .hero-metrics  { grid-template-columns: repeat(2, 1fr); }
-      .events-grid,
-      .tools-grid    { grid-template-columns: 1fr; }
-      .section-head  { flex-direction: column; align-items: flex-start; }
-      .hero-ctas     { flex-direction: column; }
+    .metric-card strong {
+      display: block;
+      margin-top: 6px;
+      font-size: 1.75rem;
+      font-family: 'Bahnschrift', 'Segoe UI', sans-serif;
+    }
+
+    .metric-card p {
+      margin: 4px 0 0;
+      color: var(--text-muted);
+      font-size: 0.82rem;
+    }
+
+    .dashboard-grid {
+      display: grid;
+      grid-template-columns: minmax(0, 1.25fr) minmax(320px, 0.75fr);
+      gap: 18px;
+      align-items: start;
+    }
+
+    .chart-card,
+    .split-card,
+    .events-card,
+    .recent-card {
+      display: grid;
+      gap: 18px;
+    }
+
+    .card-head {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+    }
+
+    .bar-chart.daily {
+      display: grid;
+      grid-template-columns: repeat(7, minmax(42px, 1fr));
+      gap: 12px;
+      min-height: 260px;
+      align-items: end;
+    }
+
+    .bar-item {
+      display: grid;
+      gap: 8px;
+      justify-items: center;
+      text-align: center;
+    }
+
+    .bar-track {
+      position: relative;
+      width: 100%;
+      max-width: 64px;
+      height: 180px;
+      border-radius: 12px;
+      background: #eef2f7;
+      overflow: hidden;
+    }
+
+    .bar-track span {
+      position: absolute;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      min-height: 4px;
+      border-radius: 12px 12px 0 0;
+      background: linear-gradient(180deg, #0d63b7, #004489);
+    }
+
+    .bar-item small {
+      color: var(--text-muted);
+    }
+
+    .payment-list,
+    .event-sales-list,
+    .recent-list {
+      display: grid;
+      gap: 14px;
+    }
+
+    .payment-row {
+      display: grid;
+      grid-template-columns: 130px minmax(0, 1fr) 44px;
+      gap: 12px;
+      align-items: center;
+    }
+
+    .payment-label span {
+      display: block;
+      margin-top: 3px;
+      color: var(--text-muted);
+      font-size: 0.82rem;
+    }
+
+    .progress-track,
+    .event-progress {
+      height: 10px;
+      border-radius: 999px;
+      background: #eef2f7;
+      overflow: hidden;
+    }
+
+    .progress-track span,
+    .event-progress span {
+      display: block;
+      height: 100%;
+      border-radius: inherit;
+      background: var(--brand-accent);
+    }
+
+    .split-values {
+      display: grid;
+      grid-template-columns: repeat(2, 1fr);
+      gap: 12px;
+    }
+
+    .split-values div {
+      padding: 18px;
+      border-radius: 14px;
+      background: #f8fafc;
+      border: 1px solid var(--surface-border);
+    }
+
+    .split-values span {
+      display: block;
+      color: var(--text-muted);
+      margin-bottom: 8px;
+    }
+
+    .split-values strong {
+      font-size: 1.35rem;
+    }
+
+    .events-card,
+    .recent-card {
+      grid-column: 1 / -1;
+    }
+
+    .event-sales-row,
+    .recent-row {
+      display: grid;
+      grid-template-columns: minmax(220px, 1fr) minmax(160px, 320px) 120px;
+      gap: 14px;
+      align-items: center;
+      padding: 14px 0;
+      border-bottom: 1px solid var(--surface-border);
+    }
+
+    .recent-row {
+      grid-template-columns: minmax(0, 1fr) auto;
+    }
+
+    .recent-row p {
+      margin: 4px 0 0;
+    }
+
+    @media (max-width: 1120px) {
+      .metric-grid {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+      }
+
+      .dashboard-grid {
+        grid-template-columns: 1fr;
+      }
+    }
+
+    @media (max-width: 720px) {
+      .sales-hero,
+      .card-head {
+        align-items: flex-start;
+        flex-direction: column;
+      }
+
+      .metric-grid,
+      .split-values {
+        grid-template-columns: 1fr;
+      }
+
+      .bar-chart.daily {
+        grid-template-columns: repeat(4, minmax(42px, 1fr));
+      }
+
+      .payment-row,
+      .event-sales-row {
+        grid-template-columns: 1fr;
+      }
     }
   `]
 })
 export class OverviewComponent {
-  private readonly auth    = inject(AuthService);
+  private readonly auth = inject(AuthService);
   private readonly booking = inject(BookingService);
-  private readonly events  = inject(EventService);
+  private readonly events = inject(EventService);
 
-  readonly user$           = this.auth.user$;
-  readonly featuredEvents$ = this.events.getFeaturedEvents().pipe(map((items) => items.slice(0, 3)));
-
-  readonly stats$ = combineLatest([this.booking.getReservations(), this.events.getFeaturedEvents()]).pipe(
-    map(([bookings, featured]) => {
-      const ticketCount = bookings.reduce((sum, b) => sum + b.seats.length, 0);
-      const revenue     = bookings.reduce((sum, b) => sum + b.totals.total, 0);
-      return [
-        { label: 'Ordenes registradas',  value: bookings.length },
-        { label: 'Tickets emitidos',     value: ticketCount },
-        { label: 'Eventos monitoreados', value: featured.length },
-        { label: 'Ingresos simulados',   value: `Q${Math.round(revenue).toLocaleString()}` }
-      ];
-    })
+  readonly user$ = this.auth.user$;
+  readonly vm$ = combineLatest([this.booking.getReservations(), this.events.events$]).pipe(
+    map(([bookings, events]) => this.buildDashboard(bookings, events))
   );
 
-  statusLabel(event: EventItem): string {
-    return event.status === 'on-sale'   ? 'Activo'
-         : event.status === 'low-stock' ? 'Baja disponibilidad'
-         :                               'Agotado';
+  private buildDashboard(bookings: BookingRecord[], events: EventItem[]): SalesDashboardVm {
+    const totalRevenue = bookings.reduce((sum, booking) => sum + booking.totals.total, 0);
+    const soldTickets = bookings.reduce((sum, booking) => sum + booking.seats.length, 0);
+    const availableTickets = events.reduce((sum, event) => sum + event.metrics.ticketsLeft, 0);
+    const cashRevenue = bookings
+      .filter((booking) => booking.paymentMethod.startsWith('Efectivo'))
+      .reduce((sum, booking) => sum + booking.totals.total, 0);
+    const cardRevenue = totalRevenue - cashRevenue;
+
+    const eventRows = events
+      .map((event) => {
+        const eventBookings = bookings.filter((booking) => booking.eventId === event.id);
+        const sold = eventBookings.reduce((sum, booking) => sum + booking.seats.length, 0);
+        const revenue = eventBookings.reduce((sum, booking) => sum + booking.totals.total, 0);
+        const available = event.metrics.ticketsLeft;
+        const capacity = sold + available;
+
+        return {
+          event,
+          sold,
+          available,
+          revenue,
+          progress: capacity > 0 ? Math.round((sold / capacity) * 100) : 0
+        };
+      })
+      .sort((a, b) => b.revenue - a.revenue)
+      .slice(0, 6);
+
+    return {
+      metrics: [
+        {
+          label: 'Resumen de ventas',
+          value: this.formatCurrency(totalRevenue),
+          detail: `${bookings.length} ordenes registradas`,
+          icon: 'query_stats'
+        },
+        {
+          label: 'Entradas vendidas',
+          value: soldTickets.toLocaleString('es-GT'),
+          detail: 'Tickets emitidos y confirmados',
+          icon: 'confirmation_number'
+        },
+        {
+          label: 'Entradas disponibles',
+          value: availableTickets.toLocaleString('es-GT'),
+          detail: `${events.length} eventos administrados`,
+          icon: 'event_available'
+        },
+        {
+          label: 'Ingresos totales',
+          value: this.formatCurrency(totalRevenue),
+          detail: `${this.formatCurrency(cashRevenue)} en efectivo`,
+          icon: 'payments'
+        }
+      ],
+      dailySales: this.buildDailySales(bookings),
+      paymentMethods: this.buildPaymentMethods(bookings),
+      eventRows,
+      recentBookings: [...bookings]
+        .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
+        .slice(0, 6),
+      totalRevenue,
+      cashRevenue,
+      cardRevenue
+    };
+  }
+
+  private buildDailySales(bookings: BookingRecord[]): ChartPoint[] {
+    const today = new Date();
+    const days = Array.from({ length: 7 }, (_, index) => {
+      const date = new Date(today);
+      date.setDate(today.getDate() - (6 - index));
+      return date;
+    });
+
+    const points = days.map((date) => {
+      const key = date.toISOString().slice(0, 10);
+      const value = bookings
+        .filter((booking) => booking.createdAt.slice(0, 10) === key)
+        .reduce((sum, booking) => sum + booking.seats.length, 0);
+
+      return {
+        label: new Intl.DateTimeFormat('es-GT', { weekday: 'short' }).format(date),
+        value,
+        display: value.toLocaleString('es-GT'),
+        percent: 0
+      };
+    });
+
+    return this.withPercent(points);
+  }
+
+  private buildPaymentMethods(bookings: BookingRecord[]): ChartPoint[] {
+    const grouped = bookings.reduce<Record<string, number>>((acc, booking) => {
+      const label = booking.paymentMethod.startsWith('Efectivo') ? 'Efectivo' : 'Tarjeta';
+      acc[label] = (acc[label] ?? 0) + booking.totals.total;
+      return acc;
+    }, {});
+
+    const points = Object.entries(grouped).map(([label, value]) => ({
+      label,
+      value,
+      display: this.formatCurrency(value),
+      percent: 0
+    }));
+
+    return this.withPercent(points.length ? points : [{ label: 'Sin ventas', value: 0, display: 'Q0.00', percent: 0 }]);
+  }
+
+  private withPercent(points: ChartPoint[]): ChartPoint[] {
+    const max = Math.max(...points.map((point) => point.value), 1);
+
+    return points.map((point) => ({
+      ...point,
+      percent: point.value > 0 ? Math.max(8, Math.round((point.value / max) * 100)) : 0
+    }));
+  }
+
+  private formatCurrency(value: number): string {
+    return new Intl.NumberFormat('es-GT', {
+      style: 'currency',
+      currency: 'GTQ',
+      maximumFractionDigits: 0
+    }).format(value);
   }
 }
