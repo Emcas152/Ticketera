@@ -40,15 +40,43 @@ import { MATERIAL_IMPORTS } from '../../shared/material/material-imports';
             </div>
           </div>
 
-          <div #viewport class="map-viewport" (wheel)="onWheel($event)" (pointerdown)="onPointerDown($event)" (pointermove)="onPointerMove($event)" (pointerup)="onPointerUp()" (pointerleave)="onPointerUp()">
-            <svg class="seat-svg" [attr.viewBox]="'0 0 ' + seatMap.width + ' ' + seatMap.height">
+          <!-- Section filter chips (outside viewport so they're always visible) -->
+          <div class="section-chips">
+            <button class="chip" *ngFor="let s of selectableSections"
+              [class.active]="activeSectionId === s.id"
+              (click)="activeSectionId = (activeSectionId === s.id ? null : s.id)">
+              <span class="chip-dot" [style.background]="s.color"></span>
+              {{ s.name }}
+            </button>
+          </div>
+
+          <div #viewport class="map-viewport">
+            <svg
+              #svgContainer
+              class="seat-svg"
+              [attr.viewBox]="viewBoxX + ' ' + viewBoxY + ' ' + viewBoxW + ' ' + viewBoxH"
+              preserveAspectRatio="xMidYMid meet"
+              (wheel)="onWheel($event)"
+              (mousedown)="onMouseDown($event)"
+              (mousemove)="onMouseMove($event)"
+              (mouseup)="onMouseUp()"
+              (mouseleave)="onMouseUp()"
+            >
               <defs>
                 <linearGradient id="tableGlow" x1="0" y1="0" x2="1" y2="1"><stop offset="0%" stop-color="#ffe893"/><stop offset="100%" stop-color="#ffae42"/></linearGradient>
                 <linearGradient id="posterBg" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stop-color="#b40d0d"/><stop offset="100%" stop-color="#6f0404"/></linearGradient>
                 <linearGradient id="stageBg" x1="0" y1="0" x2="1" y2="1"><stop offset="0%" stop-color="#070b1a"/><stop offset="100%" stop-color="#283044"/></linearGradient>
+                <filter id="glowVip" x="-50%" y="-50%" width="200%" height="200%">
+                  <feGaussianBlur stdDeviation="3" result="blur"/>
+                  <feMerge><feMergeNode in="blur"/><feMergeNode in="SourceGraphic"/></feMerge>
+                </filter>
+                <filter id="glowGeneral" x="-50%" y="-50%" width="200%" height="200%">
+                  <feGaussianBlur stdDeviation="3" result="blur"/>
+                  <feMerge><feMergeNode in="blur"/><feMergeNode in="SourceGraphic"/></feMerge>
+                </filter>
               </defs>
-              <g [attr.transform]="transformMatrix">
-                <rect x="0" y="0" [attr.width]="seatMap.width" [attr.height]="seatMap.height" fill="#a7a7aa"/>
+              <g>
+                <rect x="-250" y="-250" [attr.width]="(seatMap.width || 1900) + 500" [attr.height]="(seatMap.height || 2120) + 500" fill="#a8a8a8"/>
                 <ng-container *ngFor="let lane of seatMap.lanes ?? []">
                   <rect [attr.x]="lane.x" [attr.y]="lane.y" [attr.width]="lane.width" [attr.height]="lane.height" [attr.fill]="lane.fill"/>
                   <text class="lane-label" [attr.x]="lane.x + lane.width / 2" [attr.y]="lane.y + lane.height / 2" [attr.transform]="'rotate(-90 ' + (lane.x + lane.width / 2) + ' ' + (lane.y + lane.height / 2) + ')'" text-anchor="middle">{{ lane.label }}</text>
@@ -64,18 +92,59 @@ import { MATERIAL_IMPORTS } from '../../shared/material/material-imports';
                   <text class="poster-line" *ngFor="let line of poster.lines; let i = index" [attr.x]="poster.x + poster.width / 2" [attr.y]="poster.y + 540 + i * 84" text-anchor="middle">{{ line }}</text>
                 </g>
                 <g *ngFor="let section of seatMap.sections">
-                  <rect class="section-band" [attr.x]="sectionBounds(section).x" [attr.y]="sectionBounds(section).y" [attr.width]="sectionBounds(section).width" [attr.height]="sectionBounds(section).height" rx="28" [attr.fill]="section.color" [attr.opacity]="activeSectionId && activeSectionId !== section.id ? 0.02 : 0.055"/>
+                  <rect
+                    class="section-band map-zone-vip-outline"
+                    [ngClass]="getZoneClass(section.name)"
+                    [attr.x]="sectionBounds(section).x"
+                    [attr.y]="sectionBounds(section).y"
+                    [attr.width]="sectionBounds(section).width"
+                    [attr.height]="sectionBounds(section).height"
+                    rx="8"
+                    ry="8"
+                    [attr.opacity]="activeSectionId && activeSectionId !== section.id ? 0.25 : 1"
+                  />
+                  <text
+                    class="map-zone-section-label"
+                    [ngClass]="getSectionLabelClass(section.name)"
+                    [attr.x]="sectionBounds(section).x - 42"
+                    [attr.y]="sectionBounds(section).y + sectionBounds(section).height / 2"
+                    [attr.transform]="'rotate(-90 ' + (sectionBounds(section).x - 42) + ' ' + (sectionBounds(section).y + sectionBounds(section).height / 2) + ')'"
+                    font-size="27"
+                    letter-spacing="0.11em"
+                    text-anchor="middle"
+                    dominant-baseline="middle"
+                    pointer-events="none"
+                  >
+                    {{ section.name }}
+                  </text>
                 </g>
                 <g *ngFor="let amenity of seatMap.amenities ?? []">
                   <rect [attr.x]="amenity.x" [attr.y]="amenity.y" [attr.width]="amenity.width" [attr.height]="amenity.height" fill="#73757d"/>
                   <text class="amenity-label" [attr.x]="amenity.x + amenity.width / 2" [attr.y]="amenity.y + 54" text-anchor="middle">{{ amenity.label }}</text>
                 </g>
                 <g *ngFor="let table of seatMap.tables">
-                  <rect class="table-plate" [class.inactive]="activeSectionId && activeSectionId !== table.sectionId" [attr.x]="table.x" [attr.y]="table.y" [attr.width]="table.width" [attr.height]="table.height" rx="8" (click)="focusTable(table)"/>
-                  <text class="table-label" [class.inactive]="activeSectionId && activeSectionId !== table.sectionId" [attr.x]="table.x + table.width / 2" [attr.y]="table.y + table.height / 2 + 12" text-anchor="middle">{{ table.label }}</text>
+                  <rect
+                    class="table-plate map-table"
+                    [ngClass]="getTableClass(table.sectionName)"
+                    [class.inactive]="activeSectionId && activeSectionId !== table.sectionId"
+                    [attr.x]="table.x"
+                    [attr.y]="table.y"
+                    [attr.width]="table.width"
+                    [attr.height]="table.height"
+                    rx="4"
+                    ry="4"
+                    (click)="focusTable(table)"
+                  />
+                  <text class="table-label map-table-label" [class.inactive]="activeSectionId && activeSectionId !== table.sectionId" [attr.x]="table.x + table.width / 2" [attr.y]="table.y + table.height / 2" text-anchor="middle" dominant-baseline="middle">{{ table.label }}</text>
+                  
+                  <g *ngIf="isRowStart(table.label)" class="map-row-marker" [attr.transform]="'translate(' + (table.x - 62) + ' ' + (table.y + table.height / 2) + ')'" pointer-events="none">
+                    <circle r="15" fill="#0f172a" stroke="rgba(255, 255, 255, 0.78)" stroke-width="1.5" />
+                    <text x="0" y="1" text-anchor="middle" dominant-baseline="middle" fill="#ffffff" font-size="11" font-weight="800">{{ getRowNumber(table.label) }}</text>
+                  </g>
+
                   <g *ngFor="let seat of table.seats">
-                    <circle class="seat-node" [class.selected]="selectedSeatIds.has(seat.id)" [class.inactive]="activeSectionId && activeSectionId !== table.sectionId && !selectedSeatIds.has(seat.id)" [attr.cx]="seat.x" [attr.cy]="seat.y" [attr.r]="seatRadius(seat)" [attr.fill]="seatFill(seat)" [attr.stroke]="seatStroke(seat)" [attr.stroke-width]="selectedSeatIds.has(seat.id) ? 5 : 2" (click)="openSeatCard(seat, $event)"/>
-                    <text class="seat-number" [attr.x]="seat.x" [attr.y]="seat.y + 4" text-anchor="middle">{{ seat.number }}</text>
+                    <circle class="seat-node" [ngClass]="getSeatClass(seat)" [class.selected]="selectedSeatIds.has(seat.id)" [class.inactive]="activeSectionId && activeSectionId !== table.sectionId && !selectedSeatIds.has(seat.id)" [attr.cx]="seat.x" [attr.cy]="seat.y" [attr.r]="seatRadius(seat)" (click)="openSeatCard(seat, $event)"/>
+                    <text class="seat-number" [attr.x]="seat.x" [attr.y]="seat.y + 1" text-anchor="middle" dominant-baseline="middle">{{ seat.number }}</text>
                   </g>
                 </g>
                 <g *ngFor="let badge of seatMap.badges ?? []" [attr.transform]="'rotate(' + (badge.rotation ?? 0) + ' ' + badge.x + ' ' + badge.y + ')'">
@@ -91,17 +160,188 @@ import { MATERIAL_IMPORTS } from '../../shared/material/material-imports';
                 </g>
               </g>
             </svg>
+
+            <!-- Floating Controls matching alconProducciones -->
+            <div class="map-controls-bar">
+              <button type="button" class="control-btn center-btn" (click)="resetView()">Centrar</button>
+              <button type="button" class="control-btn zoom-icon-btn" (click)="zoomIn()">+</button>
+              <button type="button" class="control-btn zoom-icon-btn" (click)="zoomOut()">&minus;</button>
+            </div>
           </div>
         </div>
       </div>
     </section>
   `,
   styles: [`
-    .section-header,.map-topbar{display:flex;justify-content:space-between;gap:16px}.map-topbar{align-items:flex-start;flex-wrap:wrap}.map-topbar p,.section-copy{color:var(--text-muted)}.seat-layout{display:grid}.legend-card{display:flex;flex-wrap:wrap;gap:10px 16px;padding:12px 16px;border-radius:16px;background:#f8fafc;font-weight:700}.legend-card span{display:inline-flex;align-items:center;gap:8px}.dot{width:14px;height:14px;border-radius:50%}.dot.vip{background:#65ff00}.dot.general{background:#49a7ff}.dot.reserved{background:#ffb020}.dot.sold{background:#ff4b4b}.dot.selected{background:#111827}.map-viewport{position:relative;overflow:hidden;min-height:860px;border-radius:24px;background:#7d7d7d;cursor:grab;touch-action:none}.map-viewport:active{cursor:grabbing}.seat-svg{width:100%;height:100%;min-height:860px}.lane-label,.stage-title,.poster-title,.poster-subtitle,.poster-line,.amenity-label,.table-label,.badge-label,.entrance-label{font-weight:800}.lane-label{font-size:28px}.stage-title{fill:#fff;font-size:46px;letter-spacing:.08em}.poster-title{fill:#fff5dc;font-size:40px;font-style:italic}.poster-subtitle{fill:#fff;font-size:18px}.poster-line{fill:#fff;font-size:40px;letter-spacing:.06em}.amenity-label{fill:#fff;font-size:30px}.table-plate{fill:url(#tableGlow);stroke:rgba(255,245,214,.9);stroke-width:6;cursor:pointer}.table-plate.inactive,.table-label.inactive,.seat-node.inactive{opacity:.4}.table-label{fill:#374151;font-size:34px}.seat-node{cursor:pointer}.seat-number{fill:#0f172a;font-size:11px;font-weight:700;pointer-events:none}.badge-label{fill:#111827;font-size:24px}.entrance-label{fill:#050505;font-size:66px;letter-spacing:.04em}@media (max-width:768px){.section-header{flex-direction:column;align-items:stretch}.map-viewport,.seat-svg{min-height:620px}}
+    /* ─── Layout ─────────────────────────────────────────── */
+    .section-header { display:flex; justify-content:space-between; gap:16px; align-items:flex-start; }
+    .map-topbar { display:flex; justify-content:space-between; align-items:flex-start; flex-wrap:wrap; gap:16px; padding:20px 24px 16px; border-bottom:1px solid rgba(255,255,255,.1); }
+    .map-topbar strong { font-size:1rem; color:#f1f5f9 !important; }
+    .map-topbar p, .section-copy { color:#94a3b8 !important; margin:2px 0 0; font-size:.85rem; }
+    .seat-layout { display:grid; }
+    /* Override global .panel-surface padding/bg for map panel */
+    .panel-surface.map-panel { padding:0 !important; background:linear-gradient(160deg,#0f1523 0%,#141c2e 100%) !important; border-color:rgba(255,255,255,.08) !important; }
+
+    /* ─── Legend card ────────────────────────────────────── */
+    .legend-card {
+      display:flex; flex-wrap:wrap; gap:8px 14px;
+      padding:10px 16px; border-radius:14px;
+      background:rgba(255,255,255,.06);
+      backdrop-filter:blur(12px);
+      border:1px solid rgba(255,255,255,.1);
+      font-size:.78rem; font-weight:700; color:#e2e8f0;
+    }
+    .legend-card span { display:inline-flex; align-items:center; gap:7px; }
+    .dot { width:12px; height:12px; border-radius:50%; box-shadow:0 0 6px currentColor; }
+    .dot.vip     { background:#65ff00; box-shadow:0 0 8px #65ff00; }
+    .dot.general { background:#49a7ff; box-shadow:0 0 8px #49a7ff; }
+    .dot.reserved{ background:#ffb020; box-shadow:0 0 8px #ffb020; }
+    .dot.sold    { background:#ff4b4b; box-shadow:0 0 8px #ff4b4b; }
+    .dot.selected{ background:#fff;    box-shadow:0 0 8px #fff; }
+
+    /* ─── Map panel ──────────────────────────────────────── */
+    .panel-surface.map-panel {
+      border-radius:24px;
+      background:linear-gradient(160deg, #0f1523 0%, #141c2e 100%);
+      border:1px solid rgba(255,255,255,.08);
+      overflow:hidden;
+    }
+
+    /* ─── Viewport ───────────────────────────────────────── */
+    .map-viewport{position:relative;overflow:hidden;min-height:860px;border-radius:0 0 24px 24px;background:#a8a8a8;cursor:grab;touch-action:none;user-select:none}
+    .seat-svg{width:100%;height:100%;min-height:860px;display:block;position:relative;z-index:1;background:#a8a8a8}
+
+    /* alconProducciones Zone Styles */
+    .map-zone-vip-outline{fill:rgba(69,255,25,.04);stroke:rgba(69,255,25,.42);stroke-width:2.5px;stroke-dasharray:12 8}
+    .zone-diamante{fill:rgba(9,31,73,.07);stroke:rgba(9,31,73,.72)}
+    .zone-vip{fill:rgba(204,82,0,.06);stroke:rgba(204,82,0,.68)}
+    .zone-general{fill:rgba(0,120,120,.06);stroke:rgba(0,150,140,.64)}
+    .zone-default{fill:rgba(69,255,25,.04);stroke:rgba(69,255,25,.42);stroke-width:2.5px;stroke-dasharray:12 8}
+
+    /* alconProducciones Section Label Styles */
+    .map-zone-section-label{font-weight:900;paint-order:stroke fill;stroke-width:4px;stroke-linejoin:round;filter:drop-shadow(0 3px 3px rgba(0,0,0,.28));letter-spacing:.11em;font-family:Bahnschrift,'Arial Narrow',Arial,sans-serif}
+    .section-label-diamante{fill:#ffffff;stroke:#0b2c6b}
+    .section-label-vip{fill:#ffffff;stroke:#c94e00}
+    .section-label-general{fill:#ffffff;stroke:#007b82}
+    .section-label-default{fill:#ffffff;stroke:#1e293b}
+
+    /* Table Styles */
+    .map-table{rx:4px;ry:4px;stroke:rgba(255,255,255,.58);stroke-width:1.5px;filter:drop-shadow(0 3px 6px rgba(0,0,0,.22))}
+    .map-table-diamante{fill:#0b2c6b}
+    .map-table-vip{fill:#e85d04}
+    .map-table-general{fill:#008c95}
+    .map-table-default{fill:#008c95}
+    .map-table-label{fill:#ffffff;font-size:11px;font-weight:800;font-family:sans-serif}
+
+    /* Row Marker */
+    .map-row-marker circle{fill:#0f172a;stroke:rgba(255,255,255,.78);stroke-width:1.5px}
+    .map-row-marker text{fill:#ffffff;font-size:11px;font-weight:800;font-family:sans-serif}
+
+    /* Seat Styles */
+    .seat-node{cursor:pointer;transition:transform .15s}
+    .seat-node:hover{filter:brightness(1.15)}
+    .seat-number{fill:#ffffff;font-size:8px;font-weight:800;pointer-events:none;font-family:sans-serif}
+    .seat-fill-diamante{fill:#091f49;stroke:rgba(255,255,255,.24);stroke-width:1}
+    .seat-fill-vip{fill:#e06000;stroke:rgba(255,255,255,.24);stroke-width:1}
+    .seat-fill-general{fill:#008080;stroke:rgba(255,255,255,.24);stroke-width:1}
+    .seat-fill-reserved,.seat-fill-sold{fill:#9a1c28;stroke:rgba(255,255,255,.22);stroke-width:1}
+    .seat-fill-selected{fill:#ffe066;stroke:#111827;stroke-width:2;filter:drop-shadow(0 4px 10px rgba(0,0,0,.4))}
+
+    /* Floating Controls */
+    .map-controls-bar{position:absolute;bottom:16px;right:16px;z-index:20;display:flex;border-radius:6px;overflow:hidden;background:#18181b;box-shadow:0 4px 12px rgba(0,0,0,.35)}
+    .control-btn{height:36px;border:none;background:#18181b;color:#ffffff;font-weight:700;cursor:pointer;display:flex;align-items:center;justify-content:center;transition:background .15s}
+    .control-btn:hover{background:#27272a}
+    .center-btn{padding:0 16px;font-size:12px;text-transform:uppercase;letter-spacing:.14em;border-right:1px solid rgba(255,255,255,.15)}
+    .zoom-icon-btn{width:36px;font-size:18px}
+    .zoom-icon-btn:first-of-type{border-right:1px solid rgba(255,255,255,.15)}
+
+    /* ─── Section filter chips ───────────────────────────── */
+    .section-chips {
+      display:flex; flex-wrap:wrap; gap:8px;
+      padding:12px 20px 14px;
+      border-bottom:1px solid rgba(255,255,255,.07);
+    }
+    .chip {
+      display:inline-flex; align-items:center; gap:8px;
+      padding:7px 16px; border-radius:20px; cursor:pointer;
+      background:rgba(255,255,255,.07);
+      border:1.5px solid rgba(255,255,255,.18);
+      color:#e2e8f0 !important; font-size:.82rem; font-weight:700; letter-spacing:.02em;
+      transition:all .18s; white-space:nowrap;
+    }
+    .chip:hover { color:#fff !important; border-color:rgba(255,255,255,.4); background:rgba(255,255,255,.12); }
+    .chip.active {
+      color:#fff !important;
+      background:rgba(255,255,255,.18);
+      border-color:rgba(255,255,255,.5);
+      box-shadow:0 0 0 2px rgba(255,255,255,.08);
+    }
+    .chip-dot { width:10px; height:10px; border-radius:50%; flex-shrink:0; }
+
+    /* ─── Responsive ─────────────────────────────────────── */
+    @media (max-width:768px) {
+      .section-header { flex-direction:column; align-items:stretch; }
+      .map-viewport, .seat-svg { min-height:620px; }
+      .section-chips { top:8px; left:8px; }
+    }
   `]
 })
 export class SeatMapComponent {
   private readonly route = inject(ActivatedRoute);
+
+  @ViewChild('svgContainer') private svgContainerRef?: ElementRef<SVGSVGElement>;
+
+  viewBoxX = 0;
+  viewBoxY = 0;
+  viewBoxW = 1900;
+  viewBoxH = 2120;
+
+  isPanning = false;
+  startPanX = 0;
+  startPanY = 0;
+
+  getZoneClass(label: string): string {
+    const l = (label || '').toLowerCase();
+    if (l.includes('diamante')) return 'zone-diamante';
+    if (l.includes('vip')) return 'zone-vip';
+    if (l.includes('general')) return 'zone-general';
+    return 'zone-default';
+  }
+
+  getSectionLabelClass(label: string): string {
+    const l = (label || '').toLowerCase();
+    if (l.includes('diamante')) return 'section-label-diamante';
+    if (l.includes('vip')) return 'section-label-vip';
+    if (l.includes('general')) return 'section-label-general';
+    return 'section-label-default';
+  }
+
+  getTableClass(sectionName: string): string {
+    const name = (sectionName || '').toLowerCase();
+    if (name.includes('diamante')) return 'map-table-diamante';
+    if (name.includes('vip')) return 'map-table-vip';
+    if (name.includes('general')) return 'map-table-general';
+    return 'map-table-default';
+  }
+
+  getSeatClass(seat: Seat): string {
+    if (this.selectedSeatIds.has(seat.id)) return 'seat-fill-selected';
+    if (seat.status === 'reserved' || seat.status === 'sold') return 'seat-fill-sold';
+    const name = (seat.section || seat.sectionId || '').toLowerCase();
+    if (name.includes('diamante')) return 'seat-fill-diamante';
+    if (name.includes('vip')) return 'seat-fill-vip';
+    return 'seat-fill-general';
+  }
+
+  isRowStart(label: string | number): boolean {
+    const num = Number(label);
+    return Number.isFinite(num) ? (num - 1) % 10 === 0 : false;
+  }
+
+  getRowNumber(label: string | number): number {
+    const num = Number(label);
+    return Number.isFinite(num) ? Math.floor((num - 1) / 10) + 1 : 1;
+  }
   private readonly events = inject(EventService);
   private readonly booking = inject(BookingService);
   private readonly destroyRef = inject(DestroyRef);
@@ -118,11 +358,6 @@ export class SeatMapComponent {
   scale = 1;
   panX = 0;
   panY = 0;
-  private isPanning = false;
-  private startX = 0;
-  private startY = 0;
-  private startPanX = 0;
-  private startPanY = 0;
 
   constructor() {
     this.route.paramMap
@@ -200,6 +435,9 @@ export class SeatMapComponent {
 
   sectionBounds(section: SeatSection): { x: number; y: number; width: number; height: number } {
     const tables = this.seatMap?.tables.filter((table) => table.sectionId === section.id) ?? [];
+    if (!tables.length) {
+      return { x: 95, y: 130, width: 1735, height: 500 };
+    }
     const minX = Math.min(...tables.map((table) => table.x - 54));
     const maxX = Math.max(...tables.map((table) => table.x + table.width + 54));
     const minY = Math.min(...tables.map((table) => table.y - 44));
@@ -208,35 +446,103 @@ export class SeatMapComponent {
   }
 
   resetView(): void {
-    this.scale = 0.58;
-    this.panX = 10;
-    this.panY = 6;
+    if (!this.seatMap) {
+      this.viewBoxX = 0;
+      this.viewBoxY = 0;
+      this.viewBoxW = 1900;
+      this.viewBoxH = 2120;
+      return;
+    }
+
+    const tables = this.seatMap.tables ?? [];
+    if (!tables.length) {
+      this.viewBoxX = 0;
+      this.viewBoxY = 0;
+      this.viewBoxW = 1900;
+      this.viewBoxH = 2120;
+      return;
+    }
+
+    const minX = Math.min(95, ...tables.map((t) => t.x - 60));
+    const maxX = Math.max(1830, ...tables.map((t) => t.x + t.width + 60));
+    const minY = 20;
+    const maxY = Math.max(900, ...tables.map((t) => t.y + t.height + 80));
+
+    const contentW = Math.max(1, maxX - minX);
+    const contentH = Math.max(1, maxY - minY);
+
+    this.viewBoxX = minX - 95;
+    this.viewBoxY = minY - 95;
+    this.viewBoxW = contentW + 190;
+    this.viewBoxH = contentH + 190;
+  }
+
+  zoomIn(): void { this.applyZoomAtCenter(1); }
+  zoomOut(): void { this.applyZoomAtCenter(-1); }
+
+  private applyZoomAtCenter(direction: number): void {
+    const zoom = Math.exp(-direction * 0.14);
+    const newW = this.viewBoxW * zoom;
+    const newH = this.viewBoxH * zoom;
+    if (newW < 320 || newW > 4200) return;
+
+    this.viewBoxX += (this.viewBoxW - newW) / 2;
+    this.viewBoxY += (this.viewBoxH - newH) / 2;
+    this.viewBoxW = newW;
+    this.viewBoxH = newH;
+  }
+
+  private applyZoomAtCursor(direction: number, clientX: number, clientY: number): void {
+    const svgEl = this.svgContainerRef?.nativeElement || this.viewportRef?.nativeElement;
+    if (!svgEl) return;
+    const zoom = Math.exp(-direction * 0.14);
+    const newW = this.viewBoxW * zoom;
+    const newH = this.viewBoxH * zoom;
+    if (newW < 320 || newW > 4200) return;
+
+    const svgRect = svgEl.getBoundingClientRect();
+    if (!svgRect.width || !svgRect.height) return;
+
+    const ratioX = (clientX - svgRect.left) / svgRect.width;
+    const ratioY = (clientY - svgRect.top) / svgRect.height;
+
+    this.viewBoxX += (this.viewBoxW - newW) * ratioX;
+    this.viewBoxY += (this.viewBoxH - newH) * ratioY;
+    this.viewBoxW = newW;
+    this.viewBoxH = newH;
   }
 
   onWheel(event: WheelEvent): void {
     event.preventDefault();
-    this.zoomBy(event.deltaY < 0 ? 1.08 : 0.92, event.clientX, event.clientY);
+    this.applyZoomAtCursor(event.deltaY < 0 ? 1 : -1, event.clientX, event.clientY);
   }
 
-  onPointerDown(event: PointerEvent): void {
-    const tagName = (event.target as Element | null)?.tagName.toLowerCase();
-    if (tagName === 'circle') return;
+  onMouseDown(event: MouseEvent): void {
+    const target = event.target as SVGElement | null;
+    if (target?.tagName.toLowerCase() === 'circle') return;
+    event.preventDefault();
     this.isPanning = true;
-    this.startX = event.clientX;
-    this.startY = event.clientY;
-    this.startPanX = this.panX;
-    this.startPanY = this.panY;
+    this.startPanX = event.clientX;
+    this.startPanY = event.clientY;
   }
 
-  onPointerMove(event: PointerEvent): void {
-    if (!this.isPanning) return;
-    this.panX = this.startPanX + (event.clientX - this.startX);
-    this.panY = this.startPanY + (event.clientY - this.startY);
+  onMouseMove(event: MouseEvent): void {
+    const svgEl = this.svgContainerRef?.nativeElement || this.viewportRef?.nativeElement;
+    if (!this.isPanning || !svgEl) return;
+    const svgRect = svgEl.getBoundingClientRect();
+    if (!svgRect.width || !svgRect.height) return;
+
+    const dx = event.clientX - this.startPanX;
+    const dy = event.clientY - this.startPanY;
+
+    this.viewBoxX -= dx * (this.viewBoxW / svgRect.width);
+    this.viewBoxY -= dy * (this.viewBoxH / svgRect.height);
+
+    this.startPanX = event.clientX;
+    this.startPanY = event.clientY;
   }
 
-  onPointerUp(): void {
-    this.isPanning = false;
-  }
+  onMouseUp(): void { this.isPanning = false; }
 
   arrowTransform(entrance: { x: number; y: number; direction: 'left' | 'right' | 'up' | 'down' }): string {
     const rotation = { left: 0, up: -90, right: 180, down: 90 }[entrance.direction];

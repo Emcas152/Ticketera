@@ -15,9 +15,9 @@ import { MATERIAL_IMPORTS } from '../../shared/material/material-imports';
       <aside class="dashboard-nav">
 
         <div class="brand-block">
-          <img src="/assets/icons/icon-white-ui.png" alt="ALCON" />
+          <img src="/assets/icons/C5952526-EC42-4BC4-8968-7F2270317160.PNG" alt="ALCON Ticket" />
           <div>
-            <strong class="brand-name">ALCON</strong>
+            <strong class="brand-name">ALCON Ticket</strong>
             <p class="brand-sub">Admin Workspace</p>
           </div>
         </div>
@@ -34,7 +34,7 @@ import { MATERIAL_IMPORTS } from '../../shared/material/material-imports';
           <p class="nav-label">Principal</p>
           <nav class="dashboard-links">
             <a routerLink="/dashboard" routerLinkActive="is-active" [routerLinkActiveOptions]="{ exact: true }">
-              <mat-icon>dashboard</mat-icon>
+              <mat-icon>star_outline</mat-icon>
               <span>Resumen</span>
             </a>
             <a routerLink="/dashboard/tickets" routerLinkActive="is-active">
@@ -46,7 +46,7 @@ import { MATERIAL_IMPORTS } from '../../shared/material/material-imports';
               <span>Ventas en efectivo</span>
             </a>
             <a routerLink="/dashboard/validar" routerLinkActive="is-active">
-              <mat-icon>qr_code_scanner</mat-icon>
+              <mat-icon>verified_user</mat-icon>
               <span>Validar QR</span>
             </a>
             <a routerLink="/dashboard/profile" routerLinkActive="is-active">
@@ -60,7 +60,7 @@ import { MATERIAL_IMPORTS } from '../../shared/material/material-imports';
           <p class="nav-label">Herramientas</p>
           <nav class="dashboard-links">
             <a routerLink="/dashboard/eventos" routerLinkActive="is-active">
-              <mat-icon>event_note</mat-icon>
+              <mat-icon>calendar_month</mat-icon>
               <span>Eventos</span>
             </a>
             <a routerLink="/dashboard/venues" routerLinkActive="is-active">
@@ -87,7 +87,7 @@ import { MATERIAL_IMPORTS } from '../../shared/material/material-imports';
     </div>
 
     <footer class="dash-footer">
-      <p class="dash-footer-copy">&copy; {{ currentYear }} ALCON Productions. Todos los derechos reservados.</p>
+      <p class="dash-footer-copy">&copy; {{ currentYear }} ALCON Ticket. Todos los derechos reservados.</p>
       <p class="dash-footer-credit">
         Desarrollado por
         <a href="https://xpert-dev.com" target="_blank" rel="noopener noreferrer" class="dash-footer-link">
@@ -102,7 +102,7 @@ import { MATERIAL_IMPORTS } from '../../shared/material/material-imports';
         display: grid;
         grid-template-columns: 260px minmax(0, 1fr);
         min-height: calc(100vh - 64px);
-        background: linear-gradient(to right, #0f1c2e 260px, #f4f7fb 260px);
+        background: linear-gradient(to right, #0d0d0d 260px, #f7f3f9 260px);
       }
 
       /* ── Sidebar ── */
@@ -114,7 +114,7 @@ import { MATERIAL_IMPORTS } from '../../shared/material/material-imports';
         gap: 6px;
         height: calc(100vh - 64px);
         padding: 20px 14px;
-        background: #0f1c2e;
+        background: #0d0d0d;
         border-right: 1px solid rgba(255, 255, 255, 0.05);
         overflow-y: auto;
         color: #fff;
@@ -131,8 +131,8 @@ import { MATERIAL_IMPORTS } from '../../shared/material/material-imports';
       }
 
       .brand-block img {
-        width: 34px;
-        height: 34px;
+        width: 68px;
+        height: 46px;
         object-fit: contain;
         flex-shrink: 0;
       }
@@ -169,7 +169,7 @@ import { MATERIAL_IMPORTS } from '../../shared/material/material-imports';
         width: 36px;
         height: 36px;
         border-radius: 50%;
-        background: linear-gradient(135deg, #004489, #ba1c1c);
+        background: var(--brand-gradient);
         font-size: 0.78rem;
         font-weight: 800;
         flex-shrink: 0;
@@ -229,6 +229,7 @@ import { MATERIAL_IMPORTS } from '../../shared/material/material-imports';
         height: 18px;
         flex-shrink: 0;
         opacity: 0.75;
+        color: #d900dc;
       }
 
       .dashboard-links a:hover {
@@ -237,9 +238,9 @@ import { MATERIAL_IMPORTS } from '../../shared/material/material-imports';
       }
 
       .dashboard-links a.is-active {
-        background: rgba(0, 68, 137, 0.35);
+        background: linear-gradient(90deg, rgba(106, 0, 255, .38), rgba(255, 0, 122, .18));
         color: #fff;
-        border-left: 3px solid #4a9eff;
+        border-left: 3px solid #ff007a;
         padding-left: 7px;
       }
 
@@ -278,7 +279,7 @@ import { MATERIAL_IMPORTS } from '../../shared/material/material-imports';
       /* ── Content ── */
       .dashboard-content {
         padding: 28px 32px;
-        background: #f4f7fb;
+        background: #f7f3f9;
         min-height: 100%;
         overflow: auto;
       }
@@ -293,7 +294,7 @@ import { MATERIAL_IMPORTS } from '../../shared/material/material-imports';
         position: sticky;
         bottom: 0;
         padding: 12px 32px 12px calc(260px + 32px);
-        background: #f4f7fb;
+        background: #f7f3f9;
         border-top: 1px solid rgba(0,0,0,0.08);
         box-shadow: 0 -4px 12px rgba(0,0,0,0.05);
         z-index: 10;

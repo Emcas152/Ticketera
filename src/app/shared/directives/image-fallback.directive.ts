@@ -11,7 +11,7 @@ export class ImageFallbackDirective {
       `<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="800" viewBox="0 0 1200 800">
         <defs>
           <linearGradient id="g" x1="0" x2="1" y1="0" y2="1">
-            <stop stop-color="#004489" offset="0"/>
+            <stop stop-color="#6a00ff" offset="0"/>
             <stop stop-color="#BA1C1C" offset="1"/>
           </linearGradient>
         </defs>

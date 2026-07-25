@@ -169,7 +169,8 @@ export class EventService {
       venueName: input.venueName,
       address: input.address,
       image: input.image || 'https://images.unsplash.com/photo-1501281668745-f7f57925c3b4?auto=format&fit=crop&w=1200&q=80',
-      bannerColor: input.bannerColor || '#004489',
+      pdfImage: input.image,
+      bannerColor: input.bannerColor || '#6a00ff',
       basePrice: input.basePrice,
       description: input.description,
       shortDescription: input.shortDescription || input.description.slice(0, 120),
@@ -197,7 +198,10 @@ export class EventService {
       capacity: input.capacity,
       image_url: input.image || null,
       starts_at: startsAt,
-      ends_at: new Date(new Date(startsAt).getTime() + 3 * 60 * 60 * 1000).toISOString()
+      ends_at: new Date(new Date(startsAt).getTime() + 3 * 60 * 60 * 1000).toISOString(),
+      presale_starts_at: input.presaleStartsAt
+        ? new Date(input.presaleStartsAt).toISOString()
+        : null
     };
   }
 
@@ -264,7 +268,8 @@ export class EventService {
       venueName: venue?.name ?? 'Venue pendiente',
       address: venue?.address ?? '',
       image: event.image_url || 'https://images.unsplash.com/photo-1501281668745-f7f57925c3b4?auto=format&fit=crop&w=1200&q=80',
-      bannerColor: '#004489',
+      pdfImage: event.image_url ? `${environment.apiBaseUrl}/events/${event.id}/image` : undefined,
+      bannerColor: '#6a00ff',
       basePrice,
       description: event.description ?? '',
       shortDescription: (event.description ?? '').slice(0, 120),
@@ -276,7 +281,14 @@ export class EventService {
         ticketsLeft: Number(event.capacity) || seats.filter((seat) => seat.state === 'available').length || seats.length,
         rating: 4.7
       },
-      priceTiers: this.mapPriceTiers(sections, basePrice)
+      priceTiers: event.price_tiers?.length
+        ? event.price_tiers.map((tier) => ({
+            name: tier.name,
+            price: Number(tier.price),
+            description: `Sector ${tier.name}.`,
+            availability: 'available' as const
+          }))
+        : this.mapPriceTiers(sections, basePrice)
     };
   }
 
@@ -297,6 +309,7 @@ export class EventService {
   }
 
   private mapStatusFromLaravel(status: LaravelEvent['status']): EventItem['status'] {
+    if (status === 'borrador') return 'draft';
     if (status === 'eliminado' || status === 'expirado') return 'sold-out';
     return 'on-sale';
   }
@@ -376,6 +389,7 @@ export interface EventAdminInput {
   basePrice: number;
   capacity: number;
   interested: number;
+  presaleStartsAt: string;
   status: EventItem['status'];
   tags: string[];
   priceTiers: EventPriceTier[];
@@ -399,8 +413,13 @@ interface LaravelEvent {
   category?: string | null;
   image_url?: string | null;
   base_price?: number | string | null;
+  price_tiers?: Array<{
+    section_id: number | string;
+    name: string;
+    price: number | string;
+  }>;
   capacity?: number | string | null;
-  status: 'publicado' | 'eliminado' | 'expirado';
+  status: 'borrador' | 'publicado' | 'eliminado' | 'expirado';
   starts_at?: string | null;
   ends_at?: string | null;
   published_at?: string | null;
@@ -444,4 +463,5 @@ interface LaravelEventInput {
   capacity: number;
   starts_at: string;
   ends_at: string;
+  presale_starts_at: string | null;
 }

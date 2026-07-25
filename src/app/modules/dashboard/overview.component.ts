@@ -1,7 +1,7 @@
 import { AsyncPipe, CommonModule, DatePipe } from '@angular/common';
 import { Component, inject } from '@angular/core';
 import { RouterLink } from '@angular/router';
-import { combineLatest, map } from 'rxjs';
+import { BehaviorSubject, combineLatest, map } from 'rxjs';
 import { BookingRecord } from '../../core/models/booking.model';
 import { EventItem } from '../../core/models/event.model';
 import { AuthService } from '../../core/services/auth.service';
@@ -41,6 +41,16 @@ interface SalesDashboardVm {
   totalRevenue: number;
   cashRevenue: number;
   cardRevenue: number;
+  visibleEvents: EventItem[];
+  allEvents: EventItem[];
+  currentEventsCount: number;
+  hasFilters: boolean;
+}
+
+interface DashboardFilters {
+  eventId: string;
+  category: string;
+  period: 'all' | 'today' | 'week' | 'month';
 }
 
 @Component({
@@ -68,6 +78,56 @@ interface SalesDashboardVm {
       </div>
 
       <ng-container *ngIf="vm$ | async as vm">
+        <section class="filter-panel" aria-label="Filtros del dashboard">
+          <div class="filter-title">
+            <span class="filter-icon"><mat-icon>filter_alt</mat-icon></span>
+            <div>
+              <strong>Panel de análisis</strong>
+              <small>{{ vm.hasFilters ? 'Vista filtrada' : 'Mostrando eventos actuales' }}</small>
+            </div>
+          </div>
+
+          <label>
+            <span>Evento</span>
+            <select [value]="filters.eventId" (change)="setFilter('eventId', $event)">
+              <option value="all">Todos los eventos actuales</option>
+              @for (event of vm.allEvents; track event.id) {
+                <option [value]="event.id">{{ event.name }}</option>
+              }
+            </select>
+          </label>
+
+          <label>
+            <span>Categoría</span>
+            <select [value]="filters.category" (change)="setFilter('category', $event)">
+              <option value="all">Todas</option>
+              @for (category of categories(vm.allEvents); track category) {
+                <option [value]="category">{{ category }}</option>
+              }
+            </select>
+          </label>
+
+          <label>
+            <span>Periodo de ventas</span>
+            <select [value]="filters.period" (change)="setFilter('period', $event)">
+              <option value="all">Todo el historial</option>
+              <option value="today">Hoy</option>
+              <option value="week">Últimos 7 días</option>
+              <option value="month">Últimos 30 días</option>
+            </select>
+          </label>
+
+          <button type="button" class="clear-filter" [disabled]="!vm.hasFilters" (click)="clearFilters()">
+            <mat-icon>restart_alt</mat-icon>
+            Restablecer
+          </button>
+        </section>
+
+        <div class="report-status">
+          <span><i></i> Datos actualizados desde el servidor</span>
+          <strong>{{ vm.visibleEvents.length }} de {{ vm.currentEventsCount }} eventos vigentes</strong>
+        </div>
+
         <div class="metric-grid">
           @for (metric of vm.metrics; track metric.label) {
             <article class="metric-card">
@@ -208,6 +268,105 @@ interface SalesDashboardVm {
       margin: 0 auto;
     }
 
+    .filter-panel {
+      display: grid;
+      grid-template-columns: minmax(190px, 1.15fr) repeat(3, minmax(150px, 1fr)) auto;
+      gap: 12px;
+      align-items: end;
+      padding: 16px 18px;
+      border: 1px solid var(--surface-border);
+      border-radius: 16px;
+      background: #fff;
+      box-shadow: var(--shadow-soft);
+    }
+
+    .filter-title {
+      display: flex;
+      align-items: center;
+      gap: 11px;
+      align-self: center;
+    }
+
+    .filter-title small,
+    .filter-panel label span {
+      display: block;
+      color: var(--text-muted);
+      font-size: 0.72rem;
+    }
+
+    .filter-title small { margin-top: 3px; }
+
+    .filter-icon {
+      display: grid;
+      place-items: center;
+      width: 38px;
+      height: 38px;
+      border-radius: 10px;
+      color: #fff;
+      background: var(--brand-gradient);
+    }
+
+    .filter-panel label span {
+      margin: 0 0 6px 2px;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+    }
+
+    .filter-panel select {
+      width: 100%;
+      height: 42px;
+      padding: 0 34px 0 12px;
+      border: 1px solid #d9dce3;
+      border-radius: 9px;
+      background: #fff;
+      color: var(--text-primary);
+      font: 500 0.84rem Montserrat, sans-serif;
+      cursor: pointer;
+    }
+
+    .filter-panel select:focus {
+      border-color: var(--brand-primary);
+      outline: 3px solid rgba(106, 0, 255, 0.1);
+    }
+
+    .clear-filter {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 5px;
+      height: 42px;
+      padding: 0 14px;
+      border: 1px solid #d9dce3;
+      border-radius: 9px;
+      background: #fff;
+      color: var(--brand-primary);
+      font-weight: 700;
+      cursor: pointer;
+    }
+
+    .clear-filter:disabled { opacity: 0.42; cursor: default; }
+
+    .report-status {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-top: -12px;
+      padding: 0 4px;
+      color: var(--text-muted);
+      font-size: 0.76rem;
+    }
+
+    .report-status i {
+      display: inline-block;
+      width: 7px;
+      height: 7px;
+      margin-right: 5px;
+      border-radius: 50%;
+      background: #28a76f;
+      box-shadow: 0 0 0 3px rgba(40, 167, 111, 0.13);
+    }
+
     .sales-hero {
       display: flex;
       align-items: center;
@@ -216,7 +375,7 @@ interface SalesDashboardVm {
       padding: 28px;
       border-radius: 18px;
       background:
-        linear-gradient(135deg, rgba(0, 68, 137, 0.95), rgba(18, 31, 52, 0.98)),
+        linear-gradient(135deg, rgba(106, 0, 255, 0.95), rgba(13, 13, 13, 0.98)),
         url('https://images.unsplash.com/photo-1514525253161-7a46d19cd819?auto=format&fit=crop&w=1600&q=80');
       background-size: cover;
       background-position: center;
@@ -249,6 +408,7 @@ interface SalesDashboardVm {
     }
 
     .metric-card {
+      position: relative;
       display: flex;
       gap: 14px;
       min-height: 118px;
@@ -257,6 +417,15 @@ interface SalesDashboardVm {
       border-radius: 16px;
       background: #fff;
       box-shadow: var(--shadow-soft);
+      overflow: hidden;
+    }
+
+    .metric-card::before {
+      content: '';
+      position: absolute;
+      inset: 0 auto 0 0;
+      width: 4px;
+      background: var(--brand-gradient);
     }
 
     .metric-icon {
@@ -282,7 +451,7 @@ interface SalesDashboardVm {
       display: block;
       margin-top: 6px;
       font-size: 1.75rem;
-      font-family: 'Bahnschrift', 'Segoe UI', sans-serif;
+      font-family: 'Eurostile Extended', 'Montserrat', sans-serif;
     }
 
     .metric-card p {
@@ -345,7 +514,7 @@ interface SalesDashboardVm {
       bottom: 0;
       min-height: 4px;
       border-radius: 12px 12px 0 0;
-      background: linear-gradient(180deg, #0d63b7, #004489);
+      background: var(--brand-gradient);
     }
 
     .bar-item small {
@@ -436,6 +605,8 @@ interface SalesDashboardVm {
     }
 
     @media (max-width: 1120px) {
+      .filter-panel { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+
       .metric-grid {
         grid-template-columns: repeat(2, minmax(0, 1fr));
       }
@@ -446,6 +617,9 @@ interface SalesDashboardVm {
     }
 
     @media (max-width: 720px) {
+      .filter-panel { grid-template-columns: 1fr; }
+
+      .report-status { align-items: flex-start; flex-direction: column; gap: 5px; }
       .sales-hero,
       .card-head {
         align-items: flex-start;
@@ -472,13 +646,56 @@ export class OverviewComponent {
   private readonly auth = inject(AuthService);
   private readonly booking = inject(BookingService);
   private readonly events = inject(EventService);
+  private readonly filtersSubject = new BehaviorSubject<DashboardFilters>({
+    eventId: 'all',
+    category: 'all',
+    period: 'all'
+  });
 
   readonly user$ = this.auth.user$;
-  readonly vm$ = combineLatest([this.booking.getReservations(), this.events.events$]).pipe(
-    map(([bookings, events]) => this.buildDashboard(bookings, events))
+  filters = this.filtersSubject.value;
+  readonly vm$ = combineLatest([
+    this.booking.getReservations(),
+    this.events.getEvents(),
+    this.filtersSubject
+  ]).pipe(
+    map(([bookings, events, filters]) => this.buildDashboard(bookings, events, filters))
   );
 
-  private buildDashboard(bookings: BookingRecord[], events: EventItem[]): SalesDashboardVm {
+  setFilter(field: keyof DashboardFilters, event: Event): void {
+    const value = (event.target as HTMLSelectElement).value;
+    this.filters = { ...this.filters, [field]: value } as DashboardFilters;
+    this.filtersSubject.next(this.filters);
+  }
+
+  clearFilters(): void {
+    this.filters = { eventId: 'all', category: 'all', period: 'all' };
+    this.filtersSubject.next(this.filters);
+  }
+
+  categories(events: EventItem[]): string[] {
+    return [...new Set(events.map((event) => event.category).filter(Boolean))].sort((a, b) => a.localeCompare(b));
+  }
+
+  private buildDashboard(
+    bookings: BookingRecord[],
+    events: EventItem[],
+    filters: DashboardFilters
+  ): SalesDashboardVm {
+    const allEvents = [...events].sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
+    const currentEvents = allEvents.filter((event) => this.isCurrentEvent(event));
+    const hasFilters = filters.eventId !== 'all' || filters.category !== 'all' || filters.period !== 'all';
+    const visibleEvents = (hasFilters ? allEvents : currentEvents).filter((event) =>
+      (filters.eventId === 'all' || event.id === filters.eventId) &&
+      (filters.category === 'all' || event.category === filters.category)
+    );
+    const visibleEventIds = new Set(visibleEvents.map((event) => String(event.id)));
+    const visibleBookings = bookings.filter((booking) =>
+      visibleEventIds.has(String(booking.eventId)) && this.bookingMatchesPeriod(booking, filters.period)
+    );
+
+    bookings = visibleBookings;
+    events = visibleEvents;
     const totalRevenue = bookings.reduce((sum, booking) => sum + booking.totals.total, 0);
     const soldTickets = bookings.reduce((sum, booking) => sum + booking.seats.length, 0);
     const availableTickets = events.reduce((sum, event) => sum + event.metrics.ticketsLeft, 0);
@@ -541,8 +758,28 @@ export class OverviewComponent {
         .slice(0, 6),
       totalRevenue,
       cashRevenue,
-      cardRevenue
+      cardRevenue,
+      visibleEvents,
+      allEvents,
+      currentEventsCount: currentEvents.length,
+      hasFilters
     };
+  }
+
+  private isCurrentEvent(event: EventItem): boolean {
+    const startOfToday = new Date();
+    startOfToday.setHours(0, 0, 0, 0);
+    const eventDate = new Date(event.date);
+    return event.status !== 'draft' && event.status !== 'sold-out' &&
+      !Number.isNaN(eventDate.getTime()) && eventDate.getTime() >= startOfToday.getTime();
+  }
+
+  private bookingMatchesPeriod(booking: BookingRecord, period: DashboardFilters['period']): boolean {
+    if (period === 'all') return true;
+    const createdAt = new Date(booking.createdAt).getTime();
+    const now = Date.now();
+    const days = period === 'today' ? 1 : period === 'week' ? 7 : 30;
+    return createdAt >= now - days * 24 * 60 * 60 * 1000;
   }
 
   private buildDailySales(bookings: BookingRecord[]): ChartPoint[] {

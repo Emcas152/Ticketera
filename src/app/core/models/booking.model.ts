@@ -26,6 +26,7 @@ export interface BookingRecord {
   orderNumber: string;
   eventId: string;
   eventName: string;
+  eventImage?: string | null;
   eventDate: string;
   venueName: string;
   seats: Seat[];

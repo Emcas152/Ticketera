@@ -1,16 +1,27 @@
 :root {
-  --brand-primary: #004489;
-  --brand-accent: #ba1c1c;
-  --brand-ink: #252525;
+  --brand-primary: #6a00ff;
+  --brand-secondary: #ff007a;
+  --brand-accent: #ff2d6f;
+  --brand-ink: #0d0d0d;
+  --brand-white: #ffffff;
+  --brand-gradient: linear-gradient(110deg, #6a00ff 0%, #c000c8 48%, #ff2d6f 100%);
+  --brand-gradient-soft: linear-gradient(135deg, rgba(106, 0, 255, .12), rgba(255, 45, 111, .10));
   --surface: rgba(255, 255, 255, 0.96);
   --surface-border: rgba(8, 15, 30, 0.08);
-  --text-primary: #152234;
-  --text-muted: #5a6472;
+  --text-primary: #17131d;
+  --text-muted: #686271;
   --page-max: 1240px;
   --radius-md: 12px;
   --radius-lg: 18px;
-  --shadow-soft: 0 5px 20px rgba(0, 0, 0, 0.08);
+  --shadow-soft: 0 12px 34px rgba(44, 18, 60, 0.09);
   --shadow-topbar: 1px 0 10px rgba(0, 0, 0, 0.18);
+}
+
+@font-face {
+  font-family: 'Eurostile Extended';
+  src: url('/assets/icons/EurostileExtendedBlack.ttf') format('truetype');
+  font-weight: 800 900;
+  font-display: swap;
 }
 
 html,
@@ -20,10 +31,11 @@ body {
 
 body {
   margin: 0;
-  font-family: 'Segoe UI', 'Helvetica Neue', sans-serif;
+  font-family: 'Montserrat', 'Segoe UI', sans-serif;
   color: var(--text-primary);
   background:
-    linear-gradient(180deg, #f4f7fb 0%, #edf2f7 100%);
+    radial-gradient(circle at 85% 0%, rgba(255, 0, 122, .08), transparent 28%),
+    linear-gradient(180deg, #fbf9fc 0%, #f3eff7 100%);
 }
 
 h1,
@@ -31,7 +43,7 @@ h2,
 h3,
 h4 {
   margin: 0;
-  font-family: 'Bahnschrift', 'Arial Narrow', 'Segoe UI', sans-serif;
+  font-family: 'Eurostile Extended', 'Montserrat', sans-serif;
   letter-spacing: 0.02em;
   text-transform: uppercase;
 }
@@ -53,11 +65,16 @@ a {
   box-shadow: var(--shadow-soft);
 }
 
+.panel-surface::selection,
+::selection { background: rgba(255, 0, 122, .24); }
+
 .eyebrow {
   margin: 0 0 10px;
   text-transform: uppercase;
   letter-spacing: 0.08em;
   font-size: 0.75rem;
+  font-weight: 800;
+  color: var(--brand-secondary);
 }
 
 .mat-mdc-raised-button:not(:disabled),
@@ -89,6 +106,9 @@ a {
 
 .mat-mdc-form-field {
   width: 100%;
+  --mdc-outlined-text-field-focus-outline-color: #6a00ff;
+  --mdc-outlined-text-field-focus-label-text-color: #6a00ff;
+  --mat-select-focused-arrow-color: #ff007a;
 }
 
 .mat-mdc-text-field-wrapper {
@@ -101,6 +121,11 @@ a {
   --mdc-filled-button-label-text-color: #fff;
 }
 
+.mat-mdc-unelevated-button.mat-primary:not(:disabled),
+.mat-mdc-raised-button.mat-primary:not(:disabled) {
+  background: var(--brand-gradient) !important;
+}
+
 .mat-mdc-unelevated-button.mat-accent,
 .mat-mdc-raised-button.mat-accent {
   --mdc-filled-button-container-color: var(--brand-accent);
@@ -108,11 +133,14 @@ a {
 }
 
 .mat-mdc-outlined-button {
-  border-radius: 8px;
+  border-radius: 999px;
+  --mdc-outlined-button-outline-color: rgba(106, 0, 255, .42);
+  --mdc-outlined-button-label-text-color: var(--brand-primary);
 }
 
 .mat-mdc-button-base {
-  font-weight: 600;
+  font-family: 'Montserrat', sans-serif;
+  font-weight: 700;
 }
 
 .mat-icon {
@@ -177,7 +205,7 @@ a {
   text-transform: uppercase;
   letter-spacing: 0.08em;
   color: var(--text-muted);
-  background: #f8fafc;
+  background: #f8f4fb;
 }
 
 .admin-table td p {
@@ -199,13 +227,13 @@ a {
 
 .status-pill.confirmed,
 .status-pill.on-sale {
-  background: rgba(0, 68, 137, 0.12);
+  background: rgba(106, 0, 255, 0.12);
   color: var(--brand-primary);
 }
 
 .status-pill.pending,
 .status-pill.low-stock {
-  background: rgba(186, 28, 28, 0.12);
+  background: rgba(255, 45, 111, 0.12);
   color: var(--brand-accent);
 }
 
@@ -228,8 +256,8 @@ a {
   overflow: hidden;
   color: white;
   background:
-    linear-gradient(140deg, rgba(0, 68, 137, 0.92), rgba(37, 37, 37, 0.92)),
-    radial-gradient(circle at top right, rgba(186, 28, 28, 0.35), transparent 32%);
+    var(--brand-gradient),
+    #0d0d0d;
 }
 
 .auth-showcase::after {
@@ -239,7 +267,7 @@ a {
   width: 220px;
   height: 220px;
   border-radius: 50%;
-  background: rgba(186, 28, 28, 0.18);
+  background: rgba(255, 255, 255, 0.2);
   filter: blur(8px);
 }
 
@@ -248,6 +276,28 @@ a {
   height: 76px;
   object-fit: contain;
   margin-bottom: 24px;
+}
+
+.auth-showcase .brand-ticket {
+  width: min(270px, 86%);
+  height: 116px;
+  object-fit: contain;
+  object-position: left center;
+}
+
+.mat-icon {
+  color: currentColor;
+}
+
+.admin-header h1,
+.form-title strong,
+.list-head strong,
+.table-title strong {
+  font-family: 'Eurostile Extended', 'Montserrat', sans-serif;
+}
+
+.panel-surface:focus-within {
+  border-color: rgba(106, 0, 255, .22);
 }
 
 .auth-showcase .lead {
@@ -309,7 +359,7 @@ a {
 }
 
 .info-toast {
-  --mdc-snackbar-container-color: #11263d;
+  --mdc-snackbar-container-color: #2b0b45;
   --mat-snack-bar-button-color: #dbebff;
   --mdc-snackbar-supporting-text-color: #eef5ff;
 }

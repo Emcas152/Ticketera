@@ -24,6 +24,26 @@ export class VenueService {
       .pipe(map((response) => this.mapLaravelVenue(this.unwrapResource(response))));
   }
 
+  getVenueSections(venueId: number | string): Observable<VenueSection[]> {
+    return this.api.get<VenueSection[]>(`/sections/venue/${venueId}`);
+  }
+
+  createSection(input: CreateSectionInput): Observable<VenueSection> {
+    return this.api.post<VenueSection>('/sections', input);
+  }
+
+  generateSeats(input: GenerateSeatsInput): Observable<unknown> {
+    return this.api.post('/seats/generate', input);
+  }
+
+  getSeatMap(venueId: number | string): Observable<VenueSeatMap | null> {
+    return this.api.get<VenueSeatMap | null>(`/venues/${venueId}/seat-map`);
+  }
+
+  saveSeatMap(venueId: number | string, input: VenueSeatMapInput): Observable<VenueSeatMap> {
+    return this.api.put<VenueSeatMap>(`/venues/${venueId}/seat-map`, input);
+  }
+
   updateVenue(venueId: number | string, input: VenueInput): Observable<Venue> {
     return this.api
       .put<LaravelVenue | VenueResource>(`/venues/${venueId}`, input)
@@ -82,4 +102,40 @@ interface LaravelVenue {
   country?: string | null;
   status?: 'active' | 'inactive';
   seat_map_config?: Record<string, unknown> | null;
+}
+
+export interface VenueSection {
+  id: number | string;
+  venue_id?: number | string;
+  name: string;
+  code?: string | null;
+}
+
+export interface CreateSectionInput {
+  venue_id: number;
+  name: string;
+  code: string;
+}
+
+export interface GenerateSeatsInput {
+  section_id: number;
+  rows: string;
+  seats_per_row: number;
+}
+
+export interface VenueSeatMapInput {
+  canvas_width: number;
+  canvas_height: number;
+  elements: unknown[];
+  sections: unknown[];
+  tables: unknown[];
+  total_seats: number;
+  total_tables: number;
+}
+
+export interface VenueSeatMap extends VenueSeatMapInput {
+  id: number | string;
+  venue_id: number | string;
+  version: number;
+  updated_by?: number | string | null;
 }

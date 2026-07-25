@@ -1,7 +1,7 @@
 import { AsyncPipe, CommonModule } from '@angular/common';
-import { Component, inject } from '@angular/core';
+import { Component, OnDestroy, inject } from '@angular/core';
 import { RouterLink } from '@angular/router';
-import { map } from 'rxjs';
+import { map, shareReplay } from 'rxjs';
 import { EventService } from '../../core/services/event.service';
 import { EventCardComponent } from '../../shared/components/event-card/event-card.component';
 import { MATERIAL_IMPORTS } from '../../shared/material/material-imports';
@@ -11,36 +11,42 @@ import { MATERIAL_IMPORTS } from '../../shared/material/material-imports';
   standalone: true,
   imports: [CommonModule, AsyncPipe, RouterLink, EventCardComponent, ...MATERIAL_IMPORTS],
   template: `
-    <section class="hero page-shell">
-      <div class="hero-copy">
-        <img class="hero-logo" src="/assets/icons/alcon-white-ui.png" alt="ALCON Productions" />
-        <p class="eyebrow">Event commerce platform</p>
-        <h1>Descubre, reserva y gestiona eventos con una UX lista para escalar.</h1>
-        <p class="lead">
-          Frontend SaaS inspirado en Ticketmaster, Eventbrite y Airbnb UI, con compra de tickets,
-          seating visual, dashboard de usuario y arquitectura desacoplada para API REST.
-        </p>
-        <div class="hero-actions">
-          <a mat-flat-button routerLink="/events">Explorar eventos</a>
-          <a mat-stroked-button routerLink="/auth/register">Crear cuenta</a>
-        </div>
-      </div>
+    <ng-container *ngIf="featuredEvents$ | async as featuredEvents">
+      <section *ngIf="featuredEvents.length" class="event-carousel page-shell" aria-label="Eventos destacados">
+        <a [routerLink]="['/events', featuredEvents[bannerIndex].id]" class="carousel-backdrop">
+          <img [src]="featuredEvents[bannerIndex].image" [alt]="'Banner de ' + featuredEvents[bannerIndex].name" />
+          <span class="carousel-shade"></span>
+          <span class="carousel-bottom-shade"></span>
+        </a>
 
-      <div class="hero-panel panel-surface">
-        <div class="metric">
-          <strong>+120</strong>
-          <span>Eventos activos</span>
+        <div class="carousel-content">
+          <div>
+            <p class="carousel-eyebrow">
+              {{ featuredEvents[bannerIndex].category }} · {{ featuredEvents[bannerIndex].city }}
+            </p>
+            <h1>{{ featuredEvents[bannerIndex].name }}</h1>
+            <p class="carousel-date">{{ featuredEvents[bannerIndex].date | date: 'EEEE d MMM, h:mm a' }}</p>
+            <a mat-flat-button color="primary" [routerLink]="['/booking', featuredEvents[bannerIndex].id, 'seats']">
+              Ver boletos
+            </a>
+          </div>
         </div>
-        <div class="metric">
-          <strong>98%</strong>
-          <span>Checkout completion</span>
-        </div>
-        <div class="metric">
-          <strong>4.9</strong>
-          <span>Valoracion promedio</span>
-        </div>
-      </div>
-    </section>
+
+        <ng-container *ngIf="featuredEvents.length > 1">
+          <button type="button" class="carousel-arrow carousel-arrow-left" (click)="previousBanner(featuredEvents.length)" aria-label="Evento anterior">‹</button>
+          <button type="button" class="carousel-arrow carousel-arrow-right" (click)="nextBanner(featuredEvents.length)" aria-label="Evento siguiente">›</button>
+          <div class="carousel-dots" aria-label="Seleccionar evento">
+            <button
+              *ngFor="let event of featuredEvents; let index = index"
+              type="button"
+              [class.active]="bannerIndex === index"
+              (click)="selectBanner(index)"
+              [attr.aria-label]="'Mostrar ' + event.name"
+            ></button>
+          </div>
+        </ng-container>
+      </section>
+    </ng-container>
 
     <section class="page-shell section-gap">
       <div class="section-head">
@@ -73,59 +79,69 @@ import { MATERIAL_IMPORTS } from '../../shared/material/material-imports';
   `,
   styles: [
     `
-      .hero {
-        display: grid;
-        grid-template-columns: minmax(0, 1.3fr) minmax(280px, 0.7fr);
-        gap: 24px;
-        align-items: stretch;
-      }
-
-      .hero-copy {
-        padding: 56px;
+      .event-carousel {
+        position: relative;
+        min-height: 420px;
+        overflow: hidden;
+        border: 1px solid var(--surface-border);
         border-radius: var(--radius-lg);
-        background:
-          radial-gradient(circle at top left, rgba(186, 28, 28, 0.28), transparent 32%),
-          radial-gradient(circle at bottom right, rgba(0, 68, 137, 0.24), transparent 42%),
-          linear-gradient(145deg, #252525 0%, #00315f 100%);
-        color: #f3f7ff;
+        background: #000;
         box-shadow: var(--shadow-soft);
       }
 
-      .hero-logo {
-        width: min(280px, 52%);
-        height: auto;
-        margin-bottom: 12px;
+      .carousel-backdrop,
+      .carousel-backdrop img,
+      .carousel-shade,
+      .carousel-bottom-shade {
+        position: absolute;
+        inset: 0;
+        width: 100%;
+        height: 100%;
       }
 
-      .hero-copy h1 {
-        margin: 0 0 18px;
-        font-size: clamp(2rem, 5vw, 4.2rem);
-        line-height: 0.98;
-      }
+      .carousel-backdrop img { object-fit: cover; }
+      .carousel-shade { background: linear-gradient(90deg, rgba(0, 0, 0, .9), rgba(0, 0, 0, .45) 52%, rgba(0, 0, 0, .15)); }
+      .carousel-bottom-shade { background: linear-gradient(0deg, rgba(0, 0, 0, .65), transparent 58%, rgba(0, 0, 0, .1)); }
 
-      .lead {
-        max-width: 58ch;
-        color: rgba(243, 247, 255, 0.78);
-      }
-
-      .hero-actions {
+      .carousel-content {
+        position: relative;
+        z-index: 2;
         display: flex;
-        gap: 12px;
-        margin-top: 28px;
+        min-height: 420px;
+        align-items: end;
+        padding: 40px;
+        color: white;
+        pointer-events: none;
       }
 
-      .hero-panel {
-        display: grid;
-        align-content: center;
-        gap: 18px;
+      .carousel-content > div { max-width: 580px; }
+      .carousel-content h1 { margin: 16px 0; font-size: clamp(2rem, 4vw, 3rem); line-height: 1.05; }
+      .carousel-content a { margin-top: 16px; pointer-events: auto; }
+      .carousel-eyebrow { margin: 0; font-size: .75rem; font-weight: 800; letter-spacing: .18em; text-transform: uppercase; }
+      .carousel-date { margin: 0; color: rgba(255, 255, 255, .84); font-weight: 600; }
+
+      .carousel-arrow {
+        position: absolute;
+        z-index: 3;
+        top: 50%;
+        width: 44px;
+        height: 44px;
+        border: 0;
+        border-radius: 50%;
+        color: white;
+        background: rgba(0, 0, 0, .55);
+        font-size: 2rem;
+        cursor: pointer;
+        transform: translateY(-50%);
       }
 
-      .metric strong {
-        display: block;
-        font-size: 2.4rem;
-      }
+      .carousel-arrow:hover { background: rgba(0, 0, 0, .75); }
+      .carousel-arrow-left { left: 16px; }
+      .carousel-arrow-right { right: 16px; }
+      .carousel-dots { position: absolute; z-index: 3; right: 20px; bottom: 20px; display: flex; gap: 8px; }
+      .carousel-dots button { width: 10px; height: 10px; padding: 0; border: 0; border-radius: 999px; background: rgba(255, 255, 255, .4); cursor: pointer; transition: .2s; }
+      .carousel-dots button.active { width: 32px; background: white; }
 
-      .metric span,
       .eyebrow {
         color: var(--text-muted);
       }
@@ -150,20 +166,33 @@ import { MATERIAL_IMPORTS } from '../../shared/material/material-imports';
       }
 
       @media (max-width: 1024px) {
-        .hero,
         .card-grid,
         .value-grid {
           grid-template-columns: 1fr;
         }
 
-        .hero-copy {
-          padding: 28px;
-        }
+        .event-carousel,
+        .carousel-content { min-height: 360px; }
+        .carousel-content { padding: 28px; }
       }
     `
   ]
 })
-export class EventsHomeComponent {
+export class EventsHomeComponent implements OnDestroy {
   private readonly events = inject(EventService);
-  readonly featuredEvents$ = this.events.getFeaturedEvents().pipe(map((items) => items.slice(0, 3)));
+  readonly featuredEvents$ = this.events.getFeaturedEvents().pipe(
+    map((items) => items.slice(0, 3)),
+    shareReplay({ bufferSize: 1, refCount: true })
+  );
+  bannerIndex = 0;
+  private readonly carouselTimer = window.setInterval(() => {
+    this.featuredEvents$.subscribe((events) => {
+      if (events.length > 1) this.nextBanner(events.length);
+    }).unsubscribe();
+  }, 6000);
+
+  nextBanner(total: number): void { this.bannerIndex = (this.bannerIndex + 1) % total; }
+  previousBanner(total: number): void { this.bannerIndex = (this.bannerIndex - 1 + total) % total; }
+  selectBanner(index: number): void { this.bannerIndex = index; }
+  ngOnDestroy(): void { window.clearInterval(this.carouselTimer); }
 }

@@ -23,6 +23,7 @@ export interface EventItem {
   venueName: string;
   address: string;
   image: string;
+  pdfImage?: string;
   bannerColor: string;
   basePrice: number;
   description: string;

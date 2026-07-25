@@ -1,6 +1,6 @@
 param(
     [Parameter(Mandatory = $true)]
-    [string]$Host,
+    [string]$ServerHost,
 
     [Parameter(Mandatory = $true)]
     [string]$User,
@@ -52,7 +52,7 @@ $archivePath = Join-Path ([System.IO.Path]::GetTempPath()) $archiveName
 $remoteArchivePath = "/tmp/$archiveName"
 $remoteScriptPath = "/tmp/deploy-$AppName-$timestamp.sh"
 $localRemoteScriptPath = Join-Path ([System.IO.Path]::GetTempPath()) "deploy-$AppName-$timestamp.sh"
-$sshTarget = "$User@$Host"
+$sshTarget = "$User@$ServerHost"
 
 if (-not $SkipLocalBuildCheck) {
     Write-Host "Validando build local..."
@@ -135,7 +135,7 @@ install_pm2() {
 }
 
 if [ "$BOOTSTRAP_SERVER" = "1" ]; then
-  sudo apt-get update
+  sudo apt-get update --allow-releaseinfo-change
   sudo apt-get install -y curl ca-certificates build-essential
   install_node
   install_pm2

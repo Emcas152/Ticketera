@@ -265,6 +265,7 @@ const createSeatMap = (eventId: string, basePrice: number, venueName: string): S
 
 export const MOCK_CURRENT_USER: User = {
   id: 'user-01',
+  roleId: 1,
   fullName: 'Andrea Morales',
   email: 'andrea@pulseevents.io',
   phone: '+502 5555-0198',
@@ -286,7 +287,7 @@ export const MOCK_EVENTS: EventItem[] = [
     address: 'Zona 16, Guatemala City',
     image:
       'https://images.unsplash.com/photo-1493225457124-a3eb161ffa5f?auto=format&fit=crop&w=1200&q=80',
-    bannerColor: '#004489',
+    bannerColor: '#6a00ff',
     basePrice: 320,
     description:
       'Una noche de pop electronico con produccion inmersiva, hospitality premium y zonas por localidad disenadas para un flujo rapido de compra.',
@@ -318,7 +319,7 @@ export const MOCK_EVENTS: EventItem[] = [
     address: '5a Avenida Norte, Antigua Guatemala',
     image:
       'https://images.unsplash.com/photo-1511578314322-379afb476865?auto=format&fit=crop&w=1200&q=80',
-    bannerColor: '#004489',
+    bannerColor: '#6a00ff',
     basePrice: 250,
     description:
       'Conferencia enfocada en producto digital, growth y automatizacion para equipos de alto rendimiento.',
@@ -414,7 +415,7 @@ export const MOCK_EVENTS: EventItem[] = [
     address: 'Zona 4, Guatemala City',
     image:
       'https://images.unsplash.com/photo-1515169067868-5387ec356754?auto=format&fit=crop&w=1200&q=80',
-    bannerColor: '#004489',
+    bannerColor: '#6a00ff',
     basePrice: 295,
     description:
       'Summit para equipos de UX/UI, branding y producto con workshops, keynote y networking guiado.',

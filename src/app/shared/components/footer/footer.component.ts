@@ -6,8 +6,8 @@ import { Component } from '@angular/core';
   template: `
     <footer class="footer panel-surface">
       <div class="footer-brand">
-        <img src="/assets/icons/alcon-bluered-ui.png" alt="ALCON Productions" />
-        <strong>ALCON Productions</strong>
+        <img src="/assets/icons/9148A713-E2BD-44C1-BC64-96B2AC3D91AE.PNG" alt="ALCON Ticket" />
+        <strong>ALCON Ticket</strong>
         <p>Plataforma escalable para exploracion, compra y gestion de tickets.</p>
       </div>
       <div class="footer-links">
@@ -15,7 +15,7 @@ import { Component } from '@angular/core';
         <span>JWT auth</span>
         <span>Responsive UI</span>
       </div>
-      <small>© {{ year }} ALCON Productions. Frontend listo para integrarse con API REST.</small>
+      <small>© {{ year }} ALCON Ticket. Experiencias que conectan.</small>
     </footer>
   `,
   styles: [
@@ -24,7 +24,7 @@ import { Component } from '@angular/core';
         display: grid;
         gap: 16px;
         margin: 0 24px 24px;
-        border-left: 5px solid var(--brand-primary);
+        border-left: 5px solid #ff007a;
       }
 
       .footer p,

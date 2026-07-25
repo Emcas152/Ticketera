@@ -4,7 +4,7 @@ import { environment } from '../../../environments/environment';
 import { MOCK_BOOKINGS, MOCK_EVENTS, MOCK_SEAT_MAPS } from '../mocks/mock-data';
 import { BookingRecord, BookingTotals, PaymentDetails, PaymentResult } from '../models/booking.model';
 import { EventItem, EventPriceTier } from '../models/event.model';
-import { Seat, SeatMap } from '../models/seat.model';
+import { Seat, SeatMap, SeatSection, SeatTable } from '../models/seat.model';
 import { ApiService } from './api.service';
 import { NotificationService } from './notification.service';
 import { StorageService } from './storage.service';
@@ -171,7 +171,8 @@ export class BookingService {
 
     const normalizedCard = details.cardNumber.replace(/\D/g, '');
     const lastFour = normalizedCard.slice(-4);
-    const paymentMethod = `Visa ending in ${lastFour || '0000'}`;
+    const cardBrand = this.detectCardBrand(normalizedCard);
+    const paymentMethod = `${cardBrand} ending in ${lastFour || '0000'}`;
 
     if (environment.useMocks) {
       const declined = normalizedCard.endsWith('0000');
@@ -206,8 +207,8 @@ export class BookingService {
         switchMap((booking) =>
           this.api.post<LaravelPaymentResponse>('/bookings/pay', {
             booking_id: Number(booking.booking_id),
-            ticket_type: 'efectivo',
-            payment_method: 'efectivo',
+            ticket_type: 'tarjeta',
+            payment_method: 'tarjeta',
             number_target: normalizedCard || undefined,
             month_target: details.expiry.split('/')[0] || undefined,
             year_target: details.expiry.split('/')[1] || undefined,
@@ -231,6 +232,13 @@ export class BookingService {
           paymentMethod
         }))
       );
+  }
+
+  private detectCardBrand(cardNumber: string): string {
+    if (/^4/.test(cardNumber)) return 'Visa';
+    if (/^(5[1-5]|2(2[2-9]|[3-6]\d|7[01]|720))/.test(cardNumber)) return 'Mastercard';
+    if (/^3[47]/.test(cardNumber)) return 'American Express';
+    return 'Card';
   }
 
   confirmReservation(paymentMethod = 'Visa ending in 4421'): Observable<BookingRecord> {
@@ -260,6 +268,7 @@ export class BookingService {
       orderNumber: `PLS-${String(Date.now()).slice(-6)}`,
       eventId: event.id,
       eventName: event.name,
+      eventImage: event.pdfImage ?? event.image,
       eventDate: event.date,
       venueName: event.venueName,
       seats,
@@ -287,7 +296,9 @@ export class BookingService {
       return this.history$;
     }
 
-    return this.history$;
+    return this.api.get<LaravelBooking[]>('/bookings').pipe(
+      map(bookings => bookings.map(booking => this.mapLaravelBooking(booking)))
+    );
   }
 
   recordManualCashSale(event: EventItem, tier: EventPriceTier, quantity: number, customerName: string): Observable<BookingRecord> {
@@ -311,6 +322,7 @@ export class BookingService {
       orderNumber: `CASH-${Date.now().toString().slice(-6)}`,
       eventId: event.id,
       eventName: event.name,
+      eventImage: event.pdfImage ?? event.image,
       eventDate: event.date,
       venueName: event.venueName,
       seats,
@@ -507,70 +519,88 @@ export class BookingService {
 
   private mapLaravelSeatMap(eventId: string, apiSections: LaravelSeatMapSection[]): SeatMap {
     const activeEvent = this.activeEventSubject.value;
-    const sections = apiSections.map((apiSection, sectionIndex) => {
+    const validApiSections = apiSections.filter((sec) => sec.seats && sec.seats.length > 0);
+    const targetSections = validApiSections.length > 0 ? validApiSections : apiSections;
+
+    const allApiSeats: LaravelSeat[] = targetSections.flatMap((s) => s.seats);
+    const tableGroupMap = new Map<number, LaravelSeat[]>();
+
+    allApiSeats.forEach((seat, idx) => {
+      let tNum = Number(seat.number_table);
+      if (!Number.isFinite(tNum) || tNum < 1) {
+        tNum = Math.floor(idx / 10) + 1;
+      }
+      const list = tableGroupMap.get(tNum) ?? [];
+      list.push({ ...seat, number_table: tNum });
+      tableGroupMap.set(tNum, list);
+    });
+
+    const sections: SeatSection[] = targetSections.map((apiSection) => {
       const sectionName = apiSection.section || 'General';
       const sectionId = this.slugify(sectionName);
       const mappedSeats = apiSection.seats.map((seat, seatIndex) =>
-        this.mapLaravelSeat(seat, sectionId, sectionName, sectionIndex, seatIndex)
+        this.mapLaravelSeat(seat, sectionId, sectionName, 0, seatIndex)
       );
       const prices = mappedSeats.map((seat) => seat.price);
 
       return {
         id: sectionId,
         name: sectionName,
-        color: sectionId.includes('vip') ? '#39ff14' : '#38bdf8',
+        color: sectionId.includes('vip') ? '#e85d04' : sectionId.includes('diamante') ? '#0b2c6b' : '#008c95',
         polygon: '',
         labelX: 90,
-        labelY: 180 + sectionIndex * 220,
+        labelY: 180,
         seats: mappedSeats,
         priceFrom: prices.length > 0 ? Math.min(...prices) : 0
       };
     });
 
-    const tables = sections.flatMap((section, sectionIndex) => {
-      const rows = this.groupSeatsByRow(section.seats);
+    const tables: SeatTable[] = Array.from(tableGroupMap.entries()).map(([tableNumber, apiTableSeats]) => {
+      const first = apiTableSeats[0];
+      const sectionName = first?.section || 'General';
+      const sectionId = this.slugify(sectionName);
+      const position = calculateTablePosition(tableNumber, sectionName);
 
-      return [...rows.entries()].map(([row, rowSeats], rowIndex) => ({
-        id: `${section.id}-${row}`,
-        label: `${section.name} ${row}`,
-        sectionId: section.id,
-        sectionName: section.name,
-        x: 80 + rowIndex * 130,
-        y: 180 + sectionIndex * 250,
-        width: 104,
-        height: 76,
-        seats: rowSeats
-      }));
+      const tableSeats = apiTableSeats.map((s, idx) => {
+        const sNum = Number(s.number ?? s.seat_number ?? idx + 1);
+        const localPos = calculateLocalSeatPosition(sNum);
+        const mapped = this.mapLaravelSeat(s, sectionId, sectionName, 0, idx);
+        return {
+          ...mapped,
+          x: position.x + localPos.cx,
+          y: position.y + localPos.cy
+        };
+      });
+
+      return {
+        id: `table-${tableNumber}`,
+        label: String(tableNumber),
+        sectionId,
+        sectionName,
+        x: position.x,
+        y: position.y,
+        width: 32,
+        height: 78,
+        seats: tableSeats
+      };
     });
 
     return {
       eventId,
       venueName: activeEvent?.venueName ?? 'Venue',
-      width: 1200,
-      height: 900,
-      minScale: 0.5,
-      maxScale: 2.4,
+      width: 1900,
+      height: 2120,
+      minScale: 0.4,
+      maxScale: 2.5,
       stage: {
-        x: 180,
-        y: 30,
-        width: 520,
-        height: 110,
+        x: 460,
+        y: 20,
+        width: 980,
+        height: 90,
         label: 'ESCENARIO'
       },
       sections,
-      tables,
-      amenities: [
-        { id: 'restrooms', label: 'BANOS', x: 720, y: 370, width: 150, height: 150, fill: '#73757d' }
-      ],
-      lanes: [
-        { id: 'aisle-main', label: 'PASILLO', x: 350, y: 660, width: 430, height: 18, fill: '#f8fafc' }
-      ],
-      entrance: {
-        label: 'INGRESO',
-        x: 540,
-        y: 760,
-        direction: 'left'
-      }
+      tables
     };
   }
 
@@ -632,6 +662,7 @@ export class BookingService {
       orderNumber: booking.reference,
       eventId: String(event?.id ?? this.cartSubject.value.eventId ?? ''),
       eventName: event?.title ?? this.activeEventSubject.value?.name ?? 'Evento',
+      eventImage: this.activeEventSubject.value?.pdfImage ?? event?.image_url ?? this.activeEventSubject.value?.image ?? null,
       eventDate: event?.starts_at ?? this.activeEventSubject.value?.date ?? new Date().toISOString(),
       venueName: event?.venue?.name ?? this.activeEventSubject.value?.venueName ?? 'Venue',
       seats,
@@ -673,6 +704,7 @@ export class BookingService {
       orderNumber: summary.booking.reference,
       eventId: String(summary.event.id),
       eventName: summary.event.title,
+      eventImage: this.activeEventSubject.value?.pdfImage ?? summary.event.image_url ?? this.activeEventSubject.value?.image ?? null,
       eventDate: summary.event.date ?? new Date().toISOString(),
       venueName: this.activeEventSubject.value?.venueName ?? 'Venue',
       seats,
@@ -698,6 +730,7 @@ export class BookingService {
       orderNumber: ticket.booking_reference ?? `TICKET-${ticket.id}`,
       eventId: String(ticket.event?.id ?? ''),
       eventName: ticket.event?.title ?? 'Evento',
+      eventImage: ticket.event?.image_url ?? null,
       eventDate: ticket.event?.starts_at ?? ticket.issued_at ?? new Date().toISOString(),
       venueName: ticket.event?.venue ?? 'Venue',
       seats: seat ? [seat] : [],
@@ -766,6 +799,9 @@ interface LaravelSeat {
   row_label?: string;
   number?: number | string;
   seat_number?: number | string;
+  number_table?: number | string;
+  x?: number;
+  y?: number;
   label?: string;
   price?: number | string;
   state?: Seat['status'] | 'disponible' | 'reservado' | 'vendido';
@@ -796,6 +832,7 @@ interface LaravelBooking {
     id: number | string;
     title: string;
     starts_at?: string | null;
+    image_url?: string | null;
     venue?: {
       name?: string | null;
     } | null;
@@ -833,6 +870,7 @@ interface LaravelBookingSummary {
     id: number | string;
     title: string;
     date?: string | null;
+    image_url?: string | null;
   };
   customer: {
     id: number | string;
@@ -859,7 +897,58 @@ interface LaravelTicket {
     id?: number | string;
     title?: string | null;
     starts_at?: string | null;
+    image_url?: string | null;
     venue?: string | null;
   } | null;
   seat?: LaravelSeat;
+}
+
+function calculateTablePosition(tableNumber: number, sectionName?: string): { x: number; y: number } {
+  const name = (sectionName || '').toUpperCase();
+  const isGeneralOnly = name.includes('GENERAL') && tableNumber <= 15;
+
+  if (isGeneralOnly) {
+    const centerX = 934;
+    const centerY = 170 + (tableNumber - 1) * 145;
+    return { x: centerX - 16, y: centerY - 39 };
+  }
+
+  let sectionIndex: number;
+  let globalRow: number;
+
+  if (tableNumber <= 100) {
+    sectionIndex = tableNumber - 1;
+    globalRow = Math.floor(sectionIndex / 20);
+  } else if (tableNumber <= 180) {
+    sectionIndex = tableNumber - 101;
+    globalRow = Math.floor(sectionIndex / 20) + 5;
+  } else {
+    sectionIndex = tableNumber - 181;
+    globalRow = Math.floor(sectionIndex / 20) + 9;
+  }
+
+  const columnIndex = sectionIndex % 20;
+  const centerX = 150 + columnIndex * 95;
+
+  let centerY: number;
+  if (globalRow < 5) {
+    centerY = 170 + globalRow * 145;
+  } else if (globalRow < 9) {
+    centerY = 980 + (globalRow - 5) * 145;
+  } else {
+    centerY = 1660 + (globalRow - 9) * 145;
+  }
+
+  return {
+    x: centerX - 16,
+    y: centerY - 39
+  };
+}
+
+function calculateLocalSeatPosition(seatNumber: number): { cx: number; cy: number } {
+  const norm = Math.min(10, Math.max(1, Math.trunc(seatNumber)));
+  if (norm <= 5) {
+    return { cx: -10, cy: 11 + (norm - 1) * 14 };
+  }
+  return { cx: 42, cy: 11 + (norm - 6) * 14 };
 }

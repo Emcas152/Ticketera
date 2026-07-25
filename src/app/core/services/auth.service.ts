@@ -1,3 +1,4 @@
+import { DOCUMENT } from '@angular/common';
 import { inject, Injectable } from '@angular/core';
 import { BehaviorSubject, Observable, delay, map, of, switchMap, tap } from 'rxjs';
 import { environment } from '../../../environments/environment';
@@ -15,6 +16,7 @@ interface ApiAuthResponse {
   refreshToken?: string;
   expiresAt?: string;
   user?: Partial<User> & {
+    role_id?: number | string;
     name?: string;
     full_name?: string;
     membership_tier?: User['membershipTier'];
@@ -26,6 +28,7 @@ export class AuthService {
   private readonly api = inject(ApiService);
   private readonly storage = inject(StorageService);
   private readonly notifications = inject(NotificationService);
+  private readonly document = inject(DOCUMENT);
   private readonly storageKey = 'pulse-auth-session';
   private readonly sessionSubject = new BehaviorSubject<AuthSession | null>(
     this.storage.getItem<AuthSession | null>(this.storageKey, null)
@@ -84,17 +87,26 @@ export class AuthService {
   }
 
   requestPasswordReset(payload: ForgotPasswordPayload): Observable<{ message: string }> {
+    const resetUrl = new URL('/auth/reset-password', this.document.location.origin).toString();
     const request$ = environment.useMocks
       ? of({ message: `Enlace de recuperacion enviado a ${payload.email}.` }).pipe(delay(600))
-      : this.api.post<{ message: string }>('/auth/forgot-password', payload);
+      : this.api.post<{ message: string }>('/auth/forgot-password', {
+          ...payload,
+          reset_url: resetUrl
+        });
 
     return request$.pipe(tap((response) => this.notifications.info(response.message)));
   }
 
   resetPassword(payload: ResetPasswordPayload): Observable<{ message: string }> {
+    const normalizedEmail = this.extractEmail(payload.email);
+    const normalizedPayload = {
+      ...payload,
+      email: normalizedEmail
+    };
     const request$ = environment.useMocks
       ? of({ message: 'Contrasena restablecida correctamente.' }).pipe(delay(600))
-      : this.api.post<{ message: string }>('/auth/reset-password', payload);
+      : this.api.post<{ message: string }>('/auth/reset-password', normalizedPayload);
 
     return request$.pipe(tap((response) => this.notifications.success(response.message)));
   }
@@ -148,6 +160,11 @@ export class AuthService {
     return this.sessionSubject.value?.user ?? null;
   }
 
+  canAccessAdmin(): boolean {
+    const roleId = this.sessionSubject.value?.user.roleId;
+    return roleId !== undefined && [1, 2, 3].includes(roleId);
+  }
+
   private persistSession(session: AuthSession): void {
     this.storage.setItem(this.storageKey, session);
     this.sessionSubject.next(session);
@@ -177,6 +194,7 @@ export class AuthService {
     return {
       ...MOCK_CURRENT_USER,
       id: String(user?.id ?? MOCK_CURRENT_USER.id),
+      roleId: this.normalizeRoleId(user?.roleId ?? user?.role_id),
       fullName: user?.fullName ?? user?.full_name ?? user?.name ?? MOCK_CURRENT_USER.fullName,
       email: user?.email ?? fallbackEmail,
       phone: user?.phone ?? MOCK_CURRENT_USER.phone,
@@ -184,6 +202,11 @@ export class AuthService {
       membershipTier: user?.membershipTier ?? user?.membership_tier ?? MOCK_CURRENT_USER.membershipTier,
       avatarUrl: user?.avatarUrl ?? MOCK_CURRENT_USER.avatarUrl
     };
+  }
+
+  private normalizeRoleId(value: number | string | undefined): number | undefined {
+    const roleId = Number(value);
+    return Number.isInteger(roleId) ? roleId : undefined;
   }
 
   private getTokenExpiration(token: string): string {
@@ -208,6 +231,25 @@ export class AuthService {
     } catch {
       return null;
     }
+  }
+
+  private extractEmail(value: string): string {
+    const decoded = this.decodeRepeatedly(value);
+    return decoded.match(/[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}/i)?.[0]?.toLowerCase() ?? '';
+  }
+
+  private decodeRepeatedly(value: string): string {
+    let decoded = value.trim();
+    for (let attempt = 0; attempt < 2; attempt += 1) {
+      try {
+        const next = decodeURIComponent(decoded.replace(/\+/g, ' '));
+        if (next === decoded) break;
+        decoded = next;
+      } catch {
+        break;
+      }
+    }
+    return decoded;
   }
 
   private createSession(user: User): AuthSession {

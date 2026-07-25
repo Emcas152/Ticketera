@@ -12,7 +12,7 @@ import { MATERIAL_IMPORTS } from '../../shared/material/material-imports';
   template: `
     <section class="auth-page page-shell">
       <article class="auth-showcase panel-surface">
-        <img class="brand" src="/assets/icons/icon-white-ui.png" alt="ALCON Productions" />
+        <img class="brand brand-ticket" src="/assets/icons/C5952526-EC42-4BC4-8968-7F2270317160.PNG" alt="ALCON Ticket" />
         <p class="eyebrow">Recovery flow</p>
         <h1>Restablece el acceso sin salir del ecosistema de venta.</h1>
         <p class="lead">

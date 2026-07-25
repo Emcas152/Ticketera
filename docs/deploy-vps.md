@@ -11,14 +11,14 @@ Supuestos:
 Ejemplo minimo:
 
 ```powershell
-.\scripts\deploy-vps.ps1 -Host 203.0.113.10 -User root -BootstrapServer
+.\scripts\deploy-vps.ps1 -ServerHost 203.0.113.10 -User root -BootstrapServer
 ```
 
 Ejemplo con llave SSH, ruta remota y Nginx:
 
 ```powershell
 .\scripts\deploy-vps.ps1 `
-  -Host 203.0.113.10 `
+  -ServerHost 203.0.113.10 `
   -User deploy `
   -IdentityFile C:\Users\edwin\.ssh\vps_ed25519 `
   -RemotePath /var/www/sistema-tickets `
@@ -39,7 +39,7 @@ Que hace el script:
 - configura Nginx si activas `-ConfigureNginx`
 
 Parametros utiles:
-- `-Host`: IP o dominio del VPS
+- `-ServerHost`: IP o dominio del VPS
 - `-User`: usuario SSH
 - `-IdentityFile`: llave privada SSH opcional
 - `-RemotePath`: directorio base del despliegue

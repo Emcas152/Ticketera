@@ -1,7 +1,7 @@
 import { AsyncPipe, CommonModule, DatePipe } from '@angular/common';
-import { Component, inject } from '@angular/core';
+import { Component, OnInit, inject } from '@angular/core';
 import { NonNullableFormBuilder, ReactiveFormsModule, Validators } from '@angular/forms';
-import { map } from 'rxjs';
+import { map, take } from 'rxjs';
 import { BookingRecord } from '../../core/models/booking.model';
 import { EventItem, EventPriceTier } from '../../core/models/event.model';
 import { BookingService } from '../../core/services/booking.service';
@@ -188,7 +188,7 @@ import { CurrencyGtqPipe } from '../../shared/pipes/currency-gtq.pipe';
 
     .form-title span {
       font-size: 1.35rem;
-      font-family: 'Bahnschrift', 'Segoe UI', sans-serif;
+      font-family: 'Eurostile Extended', 'Montserrat', sans-serif;
       font-weight: 800;
       color: var(--brand-primary);
     }
@@ -229,7 +229,7 @@ import { CurrencyGtqPipe } from '../../shared/pipes/currency-gtq.pipe';
       gap: 14px;
       padding: 20px;
       border-radius: 16px;
-      background: linear-gradient(135deg, #101b2e, #17345d);
+      background: linear-gradient(135deg, #0d0d0d, #35104e 58%, #6a00ff);
       color: #fff;
     }
 
@@ -273,13 +273,19 @@ import { CurrencyGtqPipe } from '../../shared/pipes/currency-gtq.pipe';
     }
   `]
 })
-export class CashSalesComponent {
+export class CashSalesComponent implements OnInit {
   private readonly fb = inject(NonNullableFormBuilder);
   private readonly events = inject(EventService);
   private readonly booking = inject(BookingService);
   private readonly ticketPdf = inject(TicketPdfService);
 
-  readonly events$ = this.events.events$.pipe(map((events) => events.filter((event) => event.status !== 'draft')));
+  readonly events$ = this.events.events$.pipe(
+    map((events) => events.filter((event) =>
+      event.status !== 'draft' &&
+      event.status !== 'sold-out' &&
+      new Date(event.date).getTime() >= new Date().setHours(0, 0, 0, 0)
+    ))
+  );
   readonly cashBookings$ = this.booking
     .getReservations()
     .pipe(map((bookings) => bookings.filter((booking) => booking.paymentMethod.startsWith('Efectivo'))));
@@ -294,6 +300,10 @@ export class CashSalesComponent {
     customerName: ['']
   });
 
+  ngOnInit(): void {
+    this.events.getEvents().subscribe();
+  }
+
   get selectedTier(): EventPriceTier | null {
     return this.selectedEvent?.priceTiers.find((tier) => tier.name === this.form.controls.tierName.value) ?? null;
   }
@@ -304,10 +314,10 @@ export class CashSalesComponent {
 
   onEventChange(): void {
     const eventId = this.form.controls.eventId.value;
-    this.events.events$.subscribe((events) => {
+    this.events.events$.pipe(take(1)).subscribe((events) => {
       this.selectedEvent = events.find((event) => event.id === eventId) ?? null;
       this.form.controls.tierName.setValue(this.selectedEvent?.priceTiers[0]?.name ?? '');
-    }).unsubscribe();
+    });
   }
 
   registerSale(): void {

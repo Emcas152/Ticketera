@@ -12,10 +12,10 @@ import { MATERIAL_IMPORTS } from '../../material/material-imports';
     <header class="navbar-wrap">
       <mat-toolbar class="navbar panel-surface">
         <a routerLink="/dashboard" class="brand">
-          <img class="brand-logo" src="/assets/icons/icon-white-ui.png" alt="ALCON Productions" />
+          <img class="brand-logo" src="/assets/icons/C5952526-EC42-4BC4-8968-7F2270317160.PNG" alt="ALCON Ticket" />
           <span>
-            <strong>ALCON Productions</strong>
-            <small>Admin portal</small>
+            <strong>ALCON Ticket</strong>
+            <small>Experiencias que conectan</small>
           </span>
         </a>
 
@@ -68,9 +68,9 @@ import { MATERIAL_IMPORTS } from '../../material/material-imports';
         border-radius: 0 !important;
         padding: 0 28px;
         height: 64px;
-        background: linear-gradient(90deg, #0a1628 0%, #0f2040 60%, #0d1a35 100%);
+        background: #0d0d0d;
         color: #fff;
-        border-bottom: 1px solid rgba(255,255,255,0.07);
+        border-bottom: 2px solid #ff007a;
         box-shadow: 0 2px 16px rgba(0,0,0,0.28) !important;
       }
 
@@ -92,8 +92,8 @@ import { MATERIAL_IMPORTS } from '../../material/material-imports';
       }
 
       .brand-logo {
-        width: 44px;
-        height: 44px;
+        width: 76px;
+        height: 50px;
         object-fit: contain;
         flex-shrink: 0;
       }
@@ -117,6 +117,8 @@ import { MATERIAL_IMPORTS } from '../../material/material-imports';
 
       .desktop-links a.is-active {
         color: #fff;
+        text-decoration: underline #ff007a 2px;
+        text-underline-offset: 8px;
       }
 
       .actions .mat-mdc-button,

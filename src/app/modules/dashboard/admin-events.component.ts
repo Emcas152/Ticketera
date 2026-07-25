@@ -1,11 +1,11 @@
 import { AsyncPipe, CommonModule, DatePipe } from '@angular/common';
 import { Component, OnInit, inject } from '@angular/core';
 import { NonNullableFormBuilder, ReactiveFormsModule, Validators } from '@angular/forms';
-import { Observable } from 'rxjs';
+import { Observable, concatMap, finalize, from, map, of, switchMap, toArray } from 'rxjs';
 import { EventItem, EventPriceTier } from '../../core/models/event.model';
 import { Venue } from '../../core/models/venue.model';
 import { EventAdminInput, EventService } from '../../core/services/event.service';
-import { VenueService } from '../../core/services/venue.service';
+import { VenueSection, VenueService } from '../../core/services/venue.service';
 import { MATERIAL_IMPORTS } from '../../shared/material/material-imports';
 import { CurrencyGtqPipe } from '../../shared/pipes/currency-gtq.pipe';
 
@@ -32,12 +32,78 @@ import { CurrencyGtqPipe } from '../../shared/pipes/currency-gtq.pipe';
           <div class="form-title">
             <div>
               <strong>{{ editingEvent ? 'Editar evento' : 'Crear evento' }}</strong>
-              <p>Completa los campos requeridos para publicar el evento.</p>
+              <p>{{ editingEvent ? 'Actualiza los datos del evento.' : 'Completa el flujo operativo en orden.' }}</p>
             </div>
             <span class="status-chip">{{ form.controls.status.value }}</span>
           </div>
 
-          <div class="form-grid">
+          <mat-stepper [linear]="!editingEvent" orientation="vertical">
+            <mat-step [completed]="venueStepValid">
+              <ng-template matStepLabel>1. Ubicación</ng-template>
+              <div class="step-content">
+                <mat-form-field appearance="outline">
+                  <mat-label>Origen del venue</mat-label>
+                  <mat-select formControlName="venueMode" (selectionChange)="onVenueModeChange()" [disabled]="!!editingEvent">
+                    <mat-option value="existing">Usar venue existente</mat-option>
+                    <mat-option value="new">Crear venue nuevo</mat-option>
+                  </mat-select>
+                </mat-form-field>
+
+                @if (form.controls.venueMode.value === 'existing') {
+                  <mat-form-field appearance="outline">
+                    <mat-label>Venue existente</mat-label>
+                    <mat-select formControlName="venueId" (selectionChange)="onVenueSelectionChange()">
+                      @for (venue of venues; track venue.id) {
+                        <mat-option [value]="venue.id.toString()">{{ venue.name }}</mat-option>
+                      }
+                    </mat-select>
+                  </mat-form-field>
+                  <p class="step-note"><mat-icon>lock</mat-icon> Se reutilizarán sus secciones y asientos sin modificarlos.</p>
+                } @else {
+                  <div class="form-grid">
+                    <mat-form-field appearance="outline"><mat-label>Nombre del venue</mat-label><input matInput formControlName="newVenueName" /></mat-form-field>
+                    <mat-form-field appearance="outline"><mat-label>Dirección</mat-label><input matInput formControlName="newVenueAddress" /></mat-form-field>
+                    <mat-form-field appearance="outline"><mat-label>Ciudad</mat-label><input matInput formControlName="newVenueCity" /></mat-form-field>
+                    <mat-form-field appearance="outline"><mat-label>País</mat-label><input matInput maxlength="2" formControlName="newVenueCountry" /></mat-form-field>
+                  </div>
+                }
+                <div class="step-actions"><button mat-flat-button type="button" matStepperNext [disabled]="!venueStepValid">Continuar</button></div>
+              </div>
+            </mat-step>
+
+            <mat-step [completed]="sectionsStepValid">
+              <ng-template matStepLabel>2. Secciones y asientos</ng-template>
+              <div class="step-content">
+                @if (form.controls.venueMode.value === 'existing') {
+                  <p class="step-note"><mat-icon>check_circle</mat-icon> {{ sectionControls.length }} secciones cargadas desde el venue.</p>
+                }
+                <div formArrayName="sections" class="section-editor">
+                  @for (section of sectionControls; track $index; let index = $index) {
+                    <div class="section-row" [formGroupName]="index">
+                      <mat-form-field appearance="outline"><mat-label>Sección</mat-label><input matInput formControlName="name" [readonly]="form.controls.venueMode.value === 'existing'" /></mat-form-field>
+                      <mat-form-field appearance="outline"><mat-label>Código</mat-label><input matInput formControlName="code" [readonly]="form.controls.venueMode.value === 'existing'" /></mat-form-field>
+                      <mat-form-field appearance="outline"><mat-label>Filas</mat-label><input matInput formControlName="rows" [readonly]="form.controls.venueMode.value === 'existing'" /></mat-form-field>
+                      <mat-form-field appearance="outline"><mat-label>Asientos/fila</mat-label><input matInput type="number" min="1" formControlName="seatsPerRow" [readonly]="form.controls.venueMode.value === 'existing'" /></mat-form-field>
+                      <mat-form-field appearance="outline"><mat-label>Precio</mat-label><input matInput type="number" min="0" formControlName="price" /></mat-form-field>
+                      @if (form.controls.venueMode.value === 'new') {
+                        <button mat-icon-button type="button" aria-label="Eliminar sección" (click)="removeSection(index)"><mat-icon>delete_outline</mat-icon></button>
+                      }
+                    </div>
+                  } @empty {
+                    <p class="step-note warning"><mat-icon>warning</mat-icon> El venue no tiene secciones disponibles.</p>
+                  }
+                </div>
+                @if (form.controls.venueMode.value === 'new') {
+                  <button mat-stroked-button type="button" (click)="addSection()"><mat-icon>add</mat-icon> Agregar sección</button>
+                }
+                <div class="step-actions"><button mat-button type="button" matStepperPrevious>Atrás</button><button mat-flat-button type="button" matStepperNext [disabled]="!sectionsStepValid">Continuar</button></div>
+              </div>
+            </mat-step>
+
+            <mat-step>
+              <ng-template matStepLabel>3. Evento y preventa</ng-template>
+              <div class="step-content">
+                <div class="form-grid">
             <mat-form-field appearance="outline">
               <mat-label>Nombre</mat-label>
               <input matInput formControlName="name" />
@@ -65,15 +131,6 @@ import { CurrencyGtqPipe } from '../../shared/pipes/currency-gtq.pipe';
             <mat-form-field appearance="outline">
               <mat-label>Ubicacion</mat-label>
               <input matInput formControlName="location" />
-            </mat-form-field>
-
-            <mat-form-field appearance="outline">
-              <mat-label>Recinto</mat-label>
-              <mat-select formControlName="venueId" (selectionChange)="onVenueSelectionChange()">
-                @for (venue of venues; track venue.id) {
-                  <mat-option [value]="venue.id.toString()">{{ venue.name }}</mat-option>
-                }
-              </mat-select>
             </mat-form-field>
 
             <mat-form-field appearance="outline">
@@ -106,6 +163,11 @@ import { CurrencyGtqPipe } from '../../shared/pipes/currency-gtq.pipe';
               </mat-select>
             </mat-form-field>
 
+            <mat-form-field appearance="outline">
+              <mat-label>Inicio de preventa</mat-label>
+              <input matInput type="datetime-local" formControlName="presaleStartsAt" />
+            </mat-form-field>
+
             <div class="image-upload">
               <span>Imagen del evento{{ editingEvent ? '' : '*' }}</span>
               <input #imageInput type="file" accept="image/jpeg,image/png,image/webp" (change)="onImageSelected($event)" />
@@ -116,7 +178,7 @@ import { CurrencyGtqPipe } from '../../shared/pipes/currency-gtq.pipe';
               <small>JPG, PNG o WebP. Maximo 5 MB.</small>
               @if (imagePreview) { <img [src]="imagePreview" alt="Vista previa del evento" /> }
             </div>
-          </div>
+                </div>
 
           <mat-form-field appearance="outline">
             <mat-label>Descripcion</mat-label>
@@ -125,23 +187,22 @@ import { CurrencyGtqPipe } from '../../shared/pipes/currency-gtq.pipe';
 
           <div class="form-grid compact">
             <mat-form-field appearance="outline">
-              <mat-label>Localidades</mat-label>
-              <input matInput formControlName="tiersText" placeholder="General:150, VIP:350" />
-            </mat-form-field>
-
-            <mat-form-field appearance="outline">
               <mat-label>Etiquetas</mat-label>
               <input matInput formControlName="tagsText" placeholder="Live, Weekend" />
             </mat-form-field>
           </div>
 
           <div class="form-actions">
-            <button mat-flat-button color="primary" type="submit">
+            <button mat-button type="button" matStepperPrevious>Atrás</button>
+            <button mat-flat-button color="primary" type="submit" [disabled]="saving">
               <mat-icon>save</mat-icon>
-              {{ editingEvent ? 'Guardar cambios' : 'Crear evento' }}
+              {{ saving ? 'Creando flujo...' : (editingEvent ? 'Guardar cambios' : 'Crear evento completo') }}
             </button>
             <button mat-stroked-button type="button" (click)="resetForm()">Limpiar</button>
           </div>
+              </div>
+            </mat-step>
+          </mat-stepper>
         </form>
 
         <article class="panel-surface event-list">
@@ -234,6 +295,14 @@ import { CurrencyGtqPipe } from '../../shared/pipes/currency-gtq.pipe';
       grid-template-columns: 1fr;
     }
 
+    .step-content { display: grid; gap: 14px; padding: 14px 0 8px; }
+    .step-actions { display: flex; justify-content: flex-end; gap: 8px; }
+    .step-note { display: flex; align-items: center; gap: 8px; margin: 0; color: var(--text-muted); font-size: .84rem; }
+    .step-note mat-icon { width: 18px; height: 18px; font-size: 18px; }
+    .step-note.warning { color: #9a6700; }
+    .section-editor { display: grid; gap: 10px; }
+    .section-row { display: grid; grid-template-columns: 1.4fr .7fr .7fr 1fr 1fr auto; gap: 8px; align-items: start; }
+
     .image-upload { display: grid; gap: 8px; color: var(--text-muted); font-size: .82rem; }
     .image-upload input { display: none; }
     .image-upload img { width: 100%; height: 120px; object-fit: cover; border-radius: 10px; }
@@ -276,6 +345,8 @@ import { CurrencyGtqPipe } from '../../shared/pipes/currency-gtq.pipe';
       .event-admin-grid {
         grid-template-columns: 1fr;
       }
+
+      .section-row { grid-template-columns: repeat(2, minmax(0, 1fr)); }
     }
 
     @media (max-width: 720px) {
@@ -309,15 +380,21 @@ export class AdminEventsComponent implements OnInit {
   ];
   selectedImage: File | null = null;
   imagePreview = '';
+  saving = false;
 
   readonly form = this.fb.group({
+    venueMode: ['existing' as 'existing' | 'new'],
+    newVenueName: [''],
+    newVenueAddress: [''],
+    newVenueCity: ['Guatemala City'],
+    newVenueCountry: ['GT'],
     name: ['', Validators.required],
     category: ['Concert', Validators.required],
     city: ['Guatemala City', Validators.required],
     date: [new Date().toISOString().slice(0, 10), Validators.required],
     time: ['19:00', Validators.required],
     location: ['', Validators.required],
-    venueId: ['', Validators.required],
+    venueId: [''],
     venueName: ['', Validators.required],
     address: ['', Validators.required],
     description: ['', Validators.required],
@@ -327,10 +404,28 @@ export class AdminEventsComponent implements OnInit {
     image: [''],
     tiersText: ['General:150'],
     tagsText: ['Live'],
-    bannerColor: ['#004489'],
+    bannerColor: ['#6a00ff'],
     shortDescription: [''],
-    interested: [0]
+    interested: [0],
+    presaleStartsAt: [''],
+    sections: this.fb.array([this.createSectionGroup()])
   });
+
+  get sectionControls() { return this.form.controls.sections.controls; }
+
+  get venueStepValid(): boolean {
+    if (this.form.controls.venueMode.value === 'existing') return Boolean(this.form.controls.venueId.value);
+    return Boolean(
+      this.form.controls.newVenueName.value.trim() &&
+      this.form.controls.newVenueAddress.value.trim() &&
+      this.form.controls.newVenueCity.value.trim() &&
+      this.form.controls.newVenueCountry.value.trim().length === 2
+    );
+  }
+
+  get sectionsStepValid(): boolean {
+    return this.sectionControls.length > 0 && this.form.controls.sections.valid;
+  }
 
   ngOnInit(): void {
     this.events.getEvents().subscribe();
@@ -344,17 +439,17 @@ export class AdminEventsComponent implements OnInit {
   }
 
   saveEvent(): void {
-    if (this.form.invalid || (!this.editingEvent && !this.selectedImage)) {
+    if (this.form.invalid || !this.venueStepValid || !this.sectionsStepValid || (!this.editingEvent && !this.selectedImage)) {
       this.form.markAllAsTouched();
       return;
     }
 
-    const input = this.toAdminInput();
+    this.saving = true;
     const request$ = this.editingEvent
-      ? this.events.updateEvent(this.editingEvent.id, input)
-      : this.events.createEvent(input);
+      ? this.events.updateEvent(this.editingEvent.id, this.toAdminInput())
+      : this.createCompleteEvent();
 
-    request$.subscribe(() => this.resetForm());
+    request$.pipe(finalize(() => this.saving = false)).subscribe(() => this.resetForm());
   }
 
   editEvent(event: EventItem): void {
@@ -381,8 +476,10 @@ export class AdminEventsComponent implements OnInit {
       tagsText: event.tags.join(', '),
       bannerColor: event.bannerColor,
       shortDescription: event.shortDescription,
-      interested: event.metrics.interested
+      interested: event.metrics.interested,
+      presaleStartsAt: ''
     });
+    this.onVenueSelectionChange();
   }
 
   publishEvent(event: EventItem): void {
@@ -402,6 +499,11 @@ export class AdminEventsComponent implements OnInit {
     this.selectedImage = null;
     this.imagePreview = '';
     this.form.reset({
+      venueMode: 'existing',
+      newVenueName: '',
+      newVenueAddress: '',
+      newVenueCity: 'Guatemala City',
+      newVenueCountry: 'GT',
       name: '',
       category: 'Concert',
       city: 'Guatemala City',
@@ -418,10 +520,12 @@ export class AdminEventsComponent implements OnInit {
       image: '',
       tiersText: 'General:150',
       tagsText: 'Live',
-      bannerColor: '#004489',
+      bannerColor: '#6a00ff',
       shortDescription: '',
-      interested: 0
+      interested: 0,
+      presaleStartsAt: ''
     });
+    this.form.controls.sections.clear();
     this.onVenueSelectionChange();
   }
 
@@ -434,6 +538,28 @@ export class AdminEventsComponent implements OnInit {
       city: venue.city || this.form.controls.city.value,
       address: venue.address || this.form.controls.address.value
     });
+    this.loadVenueSections(venue.id);
+  }
+
+  onVenueModeChange(): void {
+    this.form.controls.sections.clear();
+    if (this.form.controls.venueMode.value === 'new') {
+      this.form.patchValue({ venueId: '', venueName: '', location: '', address: '' });
+      this.addSection();
+      return;
+    }
+    if (this.venues.length > 0) {
+      this.form.controls.venueId.setValue(String(this.venues[0].id));
+      this.onVenueSelectionChange();
+    }
+  }
+
+  addSection(section?: VenueSection): void {
+    this.form.controls.sections.push(this.createSectionGroup(section));
+  }
+
+  removeSection(index: number): void {
+    this.form.controls.sections.removeAt(index);
   }
 
   onImageSelected(event: Event): void {
@@ -464,8 +590,74 @@ export class AdminEventsComponent implements OnInit {
       ...raw,
       imageFile: this.selectedImage,
       tags: this.parseTags(raw.tagsText),
-      priceTiers: this.parsePriceTiers(raw.tiersText, raw.basePrice)
+      priceTiers: raw.sections.map((section) => ({
+        name: section.name,
+        price: Number(section.price),
+        description: `Localidad ${section.name}.`,
+        availability: 'available' as const
+      }))
     };
+  }
+
+  private createCompleteEvent(): Observable<EventItem> {
+    if (this.form.controls.venueMode.value === 'existing') {
+      return this.events.createEvent(this.toAdminInput());
+    }
+
+    const raw = this.form.getRawValue();
+    return this.venueService.createVenue({
+      name: raw.newVenueName.trim(),
+      address: raw.newVenueAddress.trim(),
+      city: raw.newVenueCity.trim(),
+      country: raw.newVenueCountry.trim().toUpperCase(),
+      status: 'active'
+    }).pipe(
+      switchMap((venue) => {
+        this.form.patchValue({
+          venueId: String(venue.id),
+          venueName: venue.name,
+          location: venue.name,
+          city: venue.city,
+          address: venue.address
+        });
+        return from(raw.sections).pipe(
+          concatMap((section) => this.venueService.createSection({
+            venue_id: Number(venue.id),
+            name: section.name.trim(),
+            code: section.code.trim().toUpperCase()
+          }).pipe(map((created) => ({ created, source: section })))),
+          toArray()
+        );
+      }),
+      switchMap((sections) => from(sections).pipe(
+        concatMap(({ created, source }) => this.venueService.generateSeats({
+          section_id: Number(created.id),
+          rows: source.rows.trim().toUpperCase(),
+          seats_per_row: Number(source.seatsPerRow)
+        })),
+        toArray(),
+        map(() => sections)
+      )),
+      switchMap(() => this.events.createEvent(this.toAdminInput()))
+    );
+  }
+
+  private loadVenueSections(venueId: number | string): void {
+    this.venueService.getVenueSections(venueId).subscribe((sections) => {
+      this.form.controls.sections.clear();
+      sections.forEach((section) => this.addSection(section));
+    });
+  }
+
+  private createSectionGroup(section?: VenueSection) {
+    return this.fb.group({
+      id: [section ? String(section.id) : ''],
+      name: [section?.name ?? '', Validators.required],
+      code: [section?.code ?? '', Validators.required],
+      rows: ['A', Validators.required],
+      seatsPerRow: [20, [Validators.required, Validators.min(1)]],
+      price: [150, [Validators.required, Validators.min(0)]]
+    });
   }
 
   private findVenueIdByName(venueName: string): string {
