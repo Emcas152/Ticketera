@@ -234,6 +234,52 @@ export class BookingService {
       );
   }
 
+  generateCourtesyTickets(bookingId: number | string): Observable<{ success: boolean; message?: string; booking_id?: number | string; tickets_count?: number }> {
+    if (environment.useMocks) {
+      return of({
+        success: true,
+        message: 'Tickets de cortesía generados exitosamente.',
+        booking_id: bookingId,
+        tickets_count: 1
+      }).pipe(delay(400));
+    }
+
+    return this.api.post<{ success: boolean; message?: string; booking_id?: number | string; tickets_count?: number }>('/tickets/courtesy', {
+      booking_id: Number(bookingId)
+    });
+  }
+
+  assignCourtesySeats(eventId: number | string, seatIds: Array<number | string>, beneficiaryName = 'Cortesía VIP'): Observable<{ success: boolean; message?: string; tickets_count?: number }> {
+    if (!seatIds || seatIds.length === 0) {
+      return throwError(() => new Error('No hay asientos o mesas seleccionadas para asignar cortesía.'));
+    }
+
+    if (environment.useMocks) {
+      this.markSeatsAsSold(String(eventId), seatIds.map(String));
+      this.clearSelection();
+      this.notifications.success(`Cortesía (${beneficiaryName}) asignada a ${seatIds.length} asiento(s).`);
+      return of({
+        success: true,
+        message: 'Cortesía asignada con éxito.',
+        tickets_count: seatIds.length
+      }).pipe(delay(500));
+    }
+
+    return this.api
+      .post<LaravelBookingReservation>('/bookings', {
+        event_id: Number(eventId),
+        seat_ids: seatIds.map((id) => Number(id))
+      })
+      .pipe(
+        switchMap((booking) => this.generateCourtesyTickets(booking.booking_id)),
+        tap(() => {
+          this.markSeatsAsSold(String(eventId), seatIds.map(String));
+          this.clearSelection();
+          this.notifications.success(`Cortesía (${beneficiaryName}) asignada con éxito.`);
+        })
+      );
+  }
+
   private detectCardBrand(cardNumber: string): string {
     if (/^4/.test(cardNumber)) return 'Visa';
     if (/^(5[1-5]|2(2[2-9]|[3-6]\d|7[01]|720))/.test(cardNumber)) return 'Mastercard';
@@ -296,8 +342,89 @@ export class BookingService {
       return this.history$;
     }
 
-    return this.api.get<LaravelBooking[]>('/bookings').pipe(
+    return this.api.get<LaravelBooking[], { per_page: number }>('/bookings', { per_page: 100 }).pipe(
       map(bookings => bookings.map(booking => this.mapLaravelBooking(booking)))
+    );
+  }
+
+  issueManualEntry(
+    event: EventItem,
+    seats: Seat[],
+    type: 'cash' | 'courtesy',
+    customerName: string,
+    customerPhone = ''
+  ): Observable<BookingRecord> {
+    if (seats.length === 0) {
+      return throwError(() => new Error('Selecciona al menos un asiento disponible en el mapa.'));
+    }
+
+    if (seats.some((seat) => seat.status === 'reserved' || seat.status === 'sold')) {
+      return throwError(() => new Error('Uno de los asientos seleccionados ya no está disponible.'));
+    }
+
+    const seatIds = seats.map((seat) => seat.id);
+
+    if (environment.useMocks) {
+      const totals = type === 'courtesy'
+        ? { subtotal: 0, serviceFee: 0, taxes: 0, total: 0 }
+        : this.getTotals(seats);
+      const booking: BookingRecord = {
+        id: `booking-${type}-${Date.now()}`,
+        orderNumber: `${type === 'cash' ? 'CASH' : 'CORT'}-${Date.now().toString().slice(-6)}`,
+        eventId: event.id,
+        eventName: event.name,
+        eventImage: event.pdfImage ?? event.image,
+        eventDate: event.date,
+        venueName: event.venueName,
+        seats: seats.map((seat) => ({ ...seat, status: 'sold' })),
+        totals,
+        createdAt: new Date().toISOString(),
+        paymentMethod: `${type === 'cash' ? 'Efectivo' : 'Cortesía'}${customerName ? ` - ${customerName}` : ''}`,
+        status: 'confirmed',
+        qrCode: createSecureTicketQr(),
+        usedAt: null
+      };
+
+      return of(booking).pipe(
+        delay(350),
+        tap((confirmed) => this.persistManualEntry(event.id, confirmed, seatIds, type))
+      );
+    }
+
+    return this.api.post<LaravelBookingReservation>('/bookings', {
+      event_id: Number(event.id),
+      seat_ids: seatIds.map(Number),
+      customer_name: customerName || undefined,
+      customer_phone: customerPhone || undefined
+    }).pipe(
+      switchMap((reservation) => {
+        const issue$ = type === 'courtesy'
+          ? this.generateCourtesyTickets(reservation.booking_id)
+          : this.api.post<LaravelPaymentResponse>('/bookings/pay', {
+              booking_id: Number(reservation.booking_id),
+              ticket_type: 'efectivo',
+              payment_method: 'efectivo',
+              nit: 'C/F',
+              customer_name: customerName || undefined,
+              customer_phone: customerPhone || undefined
+            });
+
+        return issue$.pipe(map(() => reservation));
+      }),
+      switchMap((reservation) =>
+        this.api.get<LaravelBookingSummary>(`/bookings/${reservation.booking_id}/summary`)
+      ),
+      map((summary) => {
+        const booking = this.mapLaravelBookingSummary(summary);
+        return {
+          ...booking,
+          totals: type === 'courtesy'
+            ? { subtotal: 0, serviceFee: 0, taxes: 0, total: 0 }
+            : booking.totals,
+          paymentMethod: `${type === 'cash' ? 'Efectivo' : 'Cortesía'}${customerName ? ` - ${customerName}` : ''}`
+        };
+      }),
+      tap((confirmed) => this.persistManualEntry(event.id, confirmed, seatIds, type))
     );
   }
 
@@ -344,6 +471,25 @@ export class BookingService {
         this.storage.setItem(this.currentBookingKey, confirmedBooking);
         this.notifications.success('Venta en efectivo registrada. Entrada generada.');
       })
+    );
+  }
+
+  private persistManualEntry(
+    eventId: string,
+    booking: BookingRecord,
+    seatIds: string[],
+    type: 'cash' | 'courtesy'
+  ): void {
+    const nextHistory = [booking, ...this.historySubject.value.filter((item) => item.id !== booking.id)];
+    this.markSeatsAsSold(eventId, seatIds);
+    this.historySubject.next(nextHistory);
+    this.currentBookingSubject.next(booking);
+    this.storage.setItem(this.historyKey, nextHistory);
+    this.storage.setItem(this.currentBookingKey, booking);
+    this.notifications.success(
+      type === 'cash'
+        ? 'Venta en efectivo registrada. Entrada generada.'
+        : 'Entrada de cortesía generada.'
     );
   }
 
@@ -613,7 +759,8 @@ export class BookingService {
   ): Seat {
     const rowIndex = Math.floor(seatIndex / 10);
     const colIndex = seatIndex % 10;
-    const price = this.getSectionPrice(sectionName);
+    const apiPrice = Number(seat.price);
+    const price = Number.isFinite(apiPrice) && apiPrice >= 0 ? apiPrice : this.getSectionPrice(sectionName);
     const row = seat.row ?? seat.row_label ?? 'A';
     const number = Number(seat.number ?? seat.seat_number ?? seatIndex + 1);
 
@@ -641,7 +788,12 @@ export class BookingService {
 
   private mapSeatStatus(status?: string): Seat['status'] {
     if (status === 'reservado' || status === 'reserved') return 'reserved';
-    if (status === 'vendido' || status === 'sold') return 'sold';
+    if (
+      status === 'vendido' ||
+      status === 'sold' ||
+      status === 'cortesia' ||
+      status === 'bloqueado'
+    ) return 'sold';
     if (status === 'selected') return 'selected';
     return 'available';
   }
@@ -656,6 +808,7 @@ export class BookingService {
   private mapLaravelBooking(booking: LaravelBooking): BookingRecord {
     const seats = (booking.seats ?? []).map((seat, index) => this.mapLaravelSeat(seat, this.slugify(seat.section), seat.section, 0, index));
     const event = booking.event;
+    const total = Number(booking.total) || 0;
 
     return {
       id: String(booking.id),
@@ -666,9 +819,14 @@ export class BookingService {
       eventDate: event?.starts_at ?? this.activeEventSubject.value?.date ?? new Date().toISOString(),
       venueName: event?.venue?.name ?? this.activeEventSubject.value?.venueName ?? 'Venue',
       seats,
-      totals: this.getTotals(seats),
-      createdAt: booking.confirmed_at ?? new Date().toISOString(),
-      paymentMethod: booking.payments?.[0]?.provider ?? 'stripe',
+      totals: {
+        subtotal: total,
+        serviceFee: 0,
+        taxes: 0,
+        total
+      },
+      createdAt: booking.created_at ?? booking.confirmed_at ?? new Date().toISOString(),
+      paymentMethod: booking.payment_method ?? booking.payments?.[0]?.provider ?? 'Sin método',
       status: this.mapBookingStatus(booking.status),
       qrCode: booking.tickets?.[0]?.qr_code ?? createSecureTicketQr(),
       usedAt: booking.tickets?.[0]?.used_at ?? null
@@ -745,7 +903,12 @@ export class BookingService {
 
   private mapBookingStatus(status: LaravelBooking['status']): BookingRecord['status'] {
     if (status === 'confirmed' || status === 'pagado') return 'confirmed';
-    if (status === 'cancelled' || status === 'cancelado') return 'cancelled';
+    if (
+      status === 'cancelled' ||
+      status === 'cancelado' ||
+      status === 'expired' ||
+      status === 'expirado'
+    ) return 'cancelled';
     return 'pending';
   }
 
@@ -804,8 +967,8 @@ interface LaravelSeat {
   y?: number;
   label?: string;
   price?: number | string;
-  state?: Seat['status'] | 'disponible' | 'reservado' | 'vendido';
-  status?: Seat['status'] | 'disponible' | 'reservado' | 'vendido';
+  state?: Seat['status'] | 'disponible' | 'reservado' | 'vendido' | 'cortesia' | 'bloqueado';
+  status?: Seat['status'] | 'disponible' | 'reservado' | 'vendido' | 'cortesia' | 'bloqueado';
 }
 
 interface LaravelSeatMapSection {
@@ -826,6 +989,8 @@ interface LaravelBooking {
   reference: string;
   status: 'reserved' | 'confirmed' | 'cancelled' | 'expired' | 'reservado' | 'pagado' | 'cancelado' | 'expirado';
   total: number | string;
+  payment_method?: string | null;
+  created_at?: string | null;
   reserved_until?: string | null;
   confirmed_at?: string | null;
   event?: {

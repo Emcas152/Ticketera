@@ -66,6 +66,7 @@ export class AuthService {
             name: payload.fullName,
             role_id: '2',
             email: payload.email,
+            phone: payload.phone || undefined,
             password: payload.password,
             password_confirmation: payload.password
           })
@@ -111,33 +112,12 @@ export class AuthService {
     return request$.pipe(tap((response) => this.notifications.success(response.message)));
   }
 
-  updateProfile(payload: Partial<User>): Observable<User> {
-    const currentSession = this.sessionSubject.value;
-    const updatedUser = {
-      ...(currentSession?.user ?? MOCK_CURRENT_USER),
-      ...payload
-    };
-
-    const request$ = of(updatedUser).pipe(delay(environment.useMocks ? 400 : 150));
-
-    return request$.pipe(
-      tap((user) => {
-        if (!currentSession) {
-          return;
-        }
-
-        this.persistSession({
-          ...currentSession,
-          user
-        });
-        this.notifications.success('Perfil actualizado.');
-      })
-    );
-  }
-
   logout(showMessage = true): void {
-    this.storage.removeItem(this.storageKey);
-    this.sessionSubject.next(null);
+    if (this.isLoggedIn() && !environment.useMocks) {
+      this.api.post<unknown>('/auth/logout', {}).subscribe({ error: () => undefined });
+    }
+
+    this.clearSession();
 
     if (showMessage) {
       this.notifications.info('Sesion cerrada.');
@@ -145,7 +125,7 @@ export class AuthService {
   }
 
   handleUnauthorized(): void {
-    this.logout(false);
+    this.clearSession();
   }
 
   isLoggedIn(): boolean {
@@ -162,7 +142,15 @@ export class AuthService {
 
   canAccessAdmin(): boolean {
     const roleId = this.sessionSubject.value?.user.roleId;
-    return roleId !== undefined && [1, 2, 3].includes(roleId);
+    return roleId !== undefined && [1, 2].includes(roleId);
+  }
+
+  canAuthorizeEntry(): boolean {
+    return this.sessionSubject.value?.user.roleId === 3;
+  }
+
+  canAccessDashboard(): boolean {
+    return this.canAccessAdmin() || this.canAuthorizeEntry();
   }
 
   private persistSession(session: AuthSession): void {
@@ -192,15 +180,14 @@ export class AuthService {
 
   private normalizeUser(user: ApiAuthResponse['user'], fallbackEmail: string): User {
     return {
-      ...MOCK_CURRENT_USER,
-      id: String(user?.id ?? MOCK_CURRENT_USER.id),
+      id: String(user?.id ?? ''),
       roleId: this.normalizeRoleId(user?.roleId ?? user?.role_id),
-      fullName: user?.fullName ?? user?.full_name ?? user?.name ?? MOCK_CURRENT_USER.fullName,
+      fullName: user?.fullName ?? user?.full_name ?? user?.name ?? fallbackEmail,
       email: user?.email ?? fallbackEmail,
-      phone: user?.phone ?? MOCK_CURRENT_USER.phone,
-      city: user?.city ?? MOCK_CURRENT_USER.city,
-      membershipTier: user?.membershipTier ?? user?.membership_tier ?? MOCK_CURRENT_USER.membershipTier,
-      avatarUrl: user?.avatarUrl ?? MOCK_CURRENT_USER.avatarUrl
+      phone: user?.phone,
+      city: user?.city,
+      membershipTier: user?.membershipTier ?? user?.membership_tier,
+      avatarUrl: user?.avatarUrl
     };
   }
 
@@ -259,5 +246,10 @@ export class AuthService {
       expiresAt: new Date(Date.now() + 1000 * 60 * 60 * 24).toISOString(),
       user
     };
+  }
+
+  private clearSession(): void {
+    this.storage.removeItem(this.storageKey);
+    this.sessionSubject.next(null);
   }
 }
