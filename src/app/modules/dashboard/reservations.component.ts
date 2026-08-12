@@ -635,7 +635,7 @@ export class ReservationsComponent {
         ...raw,
         search: raw.search.trim(),
         page: 1,
-        per_page: 200,
+        per_page: 100,
       };
 
       const allBookings: AdminBooking[] = [];
