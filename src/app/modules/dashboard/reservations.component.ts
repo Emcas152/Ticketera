@@ -2,7 +2,7 @@ import { CommonModule } from '@angular/common';
 import { Component, DestroyRef, inject, signal } from '@angular/core';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { NonNullableFormBuilder, ReactiveFormsModule } from '@angular/forms';
-import { debounceTime, distinctUntilChanged, finalize } from 'rxjs';
+import { debounceTime, distinctUntilChanged, finalize, firstValueFrom } from 'rxjs';
 import {
   AdminBooking,
   AdminBookingFilters,
@@ -619,6 +619,7 @@ export class ReservationsComponent {
     try {
       const win = window as unknown as Record<string, unknown>;
 
+      // Load SheetJS from CDN if not already loaded
       const XLSX: XLSXStatic = await new Promise<XLSXStatic>((resolve, reject) => {
         if (win['XLSX']) { resolve(win['XLSX'] as XLSXStatic); return; }
         const script = document.createElement('script');
@@ -628,7 +629,30 @@ export class ReservationsComponent {
         document.head.appendChild(script);
       });
 
-      const rows: Record<string, unknown>[] = this.reservations().map((b) => {
+      // Fetch ALL pages matching the current filters
+      const raw = this.filters.getRawValue();
+      const baseFilters: AdminBookingFilters = {
+        ...raw,
+        search: raw.search.trim(),
+        page: 1,
+        per_page: 200,
+      };
+
+      const allBookings: AdminBooking[] = [];
+      let currentPage = 1;
+      let lastPage = 1;
+
+      do {
+        const response = await firstValueFrom(
+          this.service.list({ ...baseFilters, page: currentPage })
+        );
+        allBookings.push(...response.data);
+        lastPage = response.meta.last_page;
+        currentPage++;
+      } while (currentPage <= lastPage);
+
+      // Build spreadsheet rows
+      const rows: Record<string, unknown>[] = allBookings.map((b) => {
         const seats = b.seats
           .map((s) => this.seatLabel(s) + (s.section ? ` (${s.section})` : ''))
           .join(' | ');
@@ -656,6 +680,8 @@ export class ReservationsComponent {
       const wb = XLSX.utils.book_new();
       XLSX.utils.book_append_sheet(wb, ws, 'Reservas');
       XLSX.writeFile(wb, `reservas_${new Date().toISOString().slice(0, 10)}.xlsx`);
+
+      this.notifications.success(`Excel generado con ${allBookings.length} reservas.`);
 
     } catch {
       this.notifications.error('No fue posible generar el archivo Excel. Intenta nuevamente.');
