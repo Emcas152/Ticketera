@@ -35,20 +35,9 @@ const EMPTY_FILTERS = {
           <h1>Estado de reservas</h1>
           <p>Consulta reservas, pagos en proceso y ventas confirmadas usando filtros del servidor.</p>
         </div>
-        <div class="header-actions">
-          <div class="total-card">
-            <strong>{{ total() }}</strong>
-            <span>resultados</span>
-          </div>
-          <button
-            id="btn-export-excel"
-            class="export-btn"
-            type="button"
-            [disabled]="reservations().length === 0 || exporting()"
-            (click)="exportExcel()">
-            <span class="export-icon material-icons">{{ exporting() ? 'hourglass_top' : 'download' }}</span>
-            {{ exporting() ? 'Exportando...' : 'Exportar Excel' }}
-          </button>
+        <div class="total-card">
+          <strong>{{ total() }}</strong>
+          <span>resultados</span>
         </div>
       </header>
 
@@ -89,10 +78,21 @@ const EMPTY_FILTERS = {
           <input matInput type="date" formControlName="date_to" />
         </mat-form-field>
 
-        <button mat-stroked-button type="button" (click)="clearFilters()" [disabled]="loading()">
-          <mat-icon>filter_alt_off</mat-icon>
-          Limpiar
-        </button>
+        <div class="filter-actions">
+          <button mat-stroked-button type="button" (click)="clearFilters()" [disabled]="loading()">
+            <mat-icon>filter_alt_off</mat-icon>
+            Limpiar
+          </button>
+          <button
+            id="btn-export-excel"
+            class="export-btn"
+            type="button"
+            [disabled]="reservations().length === 0 || exporting()"
+            (click)="exportExcel()">
+            <span class="export-icon material-icons">{{ exporting() ? 'hourglass_top' : 'download' }}</span>
+            {{ exporting() ? 'Exportando...' : 'Exportar Excel' }}
+          </button>
+        </div>
       </form>
 
       @if (dateError()) {
@@ -225,16 +225,19 @@ const EMPTY_FILTERS = {
     .reservations-page { display: grid; gap: 18px; }
     header { display: flex; justify-content: space-between; gap: 20px; align-items: end; flex-wrap: wrap; }
     header h1, header p { margin-bottom: 4px; }
-    .header-actions { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
     .total-card { min-width: 120px; padding: 14px 18px; border-radius: 14px; background: #111; color: #fff; text-align: center; }
     .total-card strong, .total-card span, td small { display: block; }
     .total-card strong { font-size: 1.65rem; }
+    /* filters row: search | estado | evento | desde | hasta | limpiar | export */
+    .filters { display: grid; grid-template-columns: 1.5fr repeat(4, minmax(130px, 1fr)) auto; gap: 12px; align-items: center; padding: 16px; }
+    .filters mat-form-field { width: 100%; }
+    .filter-actions { display: flex; gap: 8px; align-items: center; }
     .export-btn {
       display: inline-flex;
       align-items: center;
       gap: 8px;
-      padding: 0 20px;
-      height: 44px;
+      padding: 0 16px;
+      height: 40px;
       background: linear-gradient(135deg, #16a34a 0%, #15803d 100%);
       color: #fff !important;
       border: none;
@@ -256,8 +259,6 @@ const EMPTY_FILTERS = {
     .export-btn:disabled { opacity: .45; cursor: not-allowed; }
     .export-icon { font-size: 18px; width: 18px; height: 18px; line-height: 1; }
     .total-card span, td small { font-size: .75rem; opacity: .65; }
-    .filters { display: grid; grid-template-columns: 1.5fr repeat(4, minmax(140px, 1fr)) auto; gap: 12px; align-items: center; padding: 16px; }
-    .filters mat-form-field { width: 100%; }
     /* ── Desktop table ── */
     .table-shell { overflow-x: auto; border-radius: 12px; }
     table { width: 100%; min-width: 980px; }
