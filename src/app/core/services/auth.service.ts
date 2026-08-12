@@ -146,6 +146,11 @@ export class AuthService {
   }
 
   canAuthorizeEntry(): boolean {
+    const roleId = this.sessionSubject.value?.user.roleId;
+    return roleId !== undefined && [1, 2, 3].includes(roleId);
+  }
+
+  isAutorizadorOnly(): boolean {
     return this.sessionSubject.value?.user.roleId === 3;
   }
 

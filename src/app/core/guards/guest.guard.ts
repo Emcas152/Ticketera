@@ -6,7 +6,7 @@ export const guestGuard: CanActivateFn = () => {
   const auth = inject(AuthService);
   const router = inject(Router);
 
-  return auth.isLoggedIn() && auth.canAccessAdmin()
-    ? router.createUrlTree(['/dashboard'])
+  return auth.isLoggedIn() && auth.canAccessDashboard()
+    ? router.createUrlTree([auth.canAuthorizeEntry() ? '/dashboard/validar' : '/dashboard'])
     : true;
 };

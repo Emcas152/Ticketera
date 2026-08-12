@@ -163,8 +163,9 @@ a {
 }
 
 .admin-shell {
-  width: min(100%, var(--page-max));
-  margin: 0 auto;
+  width: 100%;
+  max-width: 100%;
+  margin: 0;
 }
 
 .admin-header {
@@ -172,7 +173,7 @@ a {
   justify-content: space-between;
   align-items: end;
   gap: 16px;
-  margin-bottom: 20px;
+  margin-bottom: 14px;
 }
 
 .admin-subtitle {

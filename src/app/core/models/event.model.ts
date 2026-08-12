@@ -13,6 +13,7 @@ export interface EventMetrics {
 
 export interface EventItem {
   id: string;
+  venueId?: number | string;
   slug: string;
   name: string;
   category: string;

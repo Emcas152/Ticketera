@@ -43,7 +43,7 @@ import { CurrencyGtqPipe } from '../../shared/pipes/currency-gtq.pipe';
               <div class="step-content">
                 <mat-form-field appearance="outline">
                   <mat-label>Origen del venue</mat-label>
-                  <mat-select formControlName="venueMode" (selectionChange)="onVenueModeChange()" [disabled]="!!editingEvent">
+                  <mat-select formControlName="venueMode" (selectionChange)="onVenueModeChange()">
                     <mat-option value="existing">Usar venue existente</mat-option>
                     <mat-option value="new">Crear venue nuevo</mat-option>
                   </mat-select>
@@ -80,22 +80,18 @@ import { CurrencyGtqPipe } from '../../shared/pipes/currency-gtq.pipe';
                 <div formArrayName="sections" class="section-editor">
                   @for (section of sectionControls; track $index; let index = $index) {
                     <div class="section-row" [formGroupName]="index">
-                      <mat-form-field appearance="outline"><mat-label>Sección</mat-label><input matInput formControlName="name" [readonly]="form.controls.venueMode.value === 'existing'" /></mat-form-field>
-                      <mat-form-field appearance="outline"><mat-label>Código</mat-label><input matInput formControlName="code" [readonly]="form.controls.venueMode.value === 'existing'" /></mat-form-field>
-                      <mat-form-field appearance="outline"><mat-label>Filas</mat-label><input matInput formControlName="rows" [readonly]="form.controls.venueMode.value === 'existing'" /></mat-form-field>
-                      <mat-form-field appearance="outline"><mat-label>Asientos/fila</mat-label><input matInput type="number" min="1" formControlName="seatsPerRow" [readonly]="form.controls.venueMode.value === 'existing'" /></mat-form-field>
+                      <mat-form-field appearance="outline"><mat-label>Sección</mat-label><input matInput formControlName="name" /></mat-form-field>
+                      <mat-form-field appearance="outline"><mat-label>Código</mat-label><input matInput formControlName="code" /></mat-form-field>
+                      <mat-form-field appearance="outline"><mat-label>Filas</mat-label><input matInput formControlName="rows" /></mat-form-field>
+                      <mat-form-field appearance="outline"><mat-label>Asientos/fila</mat-label><input matInput type="number" min="1" formControlName="seatsPerRow" /></mat-form-field>
                       <mat-form-field appearance="outline"><mat-label>Precio</mat-label><input matInput type="number" min="0" formControlName="price" /></mat-form-field>
-                      @if (form.controls.venueMode.value === 'new') {
-                        <button mat-icon-button type="button" aria-label="Eliminar sección" (click)="removeSection(index)"><mat-icon>delete_outline</mat-icon></button>
-                      }
+                      <button mat-icon-button type="button" aria-label="Eliminar sección" (click)="removeSection(index)"><mat-icon>delete_outline</mat-icon></button>
                     </div>
                   } @empty {
                     <p class="step-note warning"><mat-icon>warning</mat-icon> El venue no tiene secciones disponibles.</p>
                   }
                 </div>
-                @if (form.controls.venueMode.value === 'new') {
-                  <button mat-stroked-button type="button" (click)="addSection()"><mat-icon>add</mat-icon> Agregar sección</button>
-                }
+                <button mat-stroked-button type="button" (click)="addSection()"><mat-icon>add</mat-icon> Agregar sección</button>
                 <div class="step-actions"><button mat-button type="button" matStepperPrevious>Atrás</button><button mat-flat-button type="button" matStepperNext [disabled]="!sectionsStepValid">Continuar</button></div>
               </div>
             </mat-step>
@@ -219,7 +215,7 @@ import { CurrencyGtqPipe } from '../../shared/pipes/currency-gtq.pipe';
                   <strong>{{ event.name }}</strong>
                   <span class="status-pill" [class]="event.status">{{ statusLabel(event) }}</span>
                 </div>
-                <p>{{ event.date | date: 'd MMM y' }} Â· {{ event.time }} Â· {{ event.venueName }}</p>
+                <p>{{ event.date | date: 'd MMM y' }} &middot; {{ event.time }} &middot; {{ event.venueName }}</p>
                 <div class="event-meta">
                   <span>{{ event.metrics.ticketsLeft }} entradas</span>
                   <span>{{ event.basePrice | currencyGtq }}</span>
@@ -650,13 +646,17 @@ export class AdminEventsComponent implements OnInit {
   }
 
   private createSectionGroup(section?: VenueSection) {
+    const tierPrice = this.editingEvent
+      ? this.editingEvent.priceTiers.find((t) => t.name.toLowerCase() === (section?.name ?? '').toLowerCase())?.price
+      : undefined;
+
     return this.fb.group({
       id: [section ? String(section.id) : ''],
       name: [section?.name ?? '', Validators.required],
       code: [section?.code ?? '', Validators.required],
       rows: ['A', Validators.required],
       seatsPerRow: [20, [Validators.required, Validators.min(1)]],
-      price: [150, [Validators.required, Validators.min(0)]]
+      price: [tierPrice ?? 150, [Validators.required, Validators.min(0)]]
     });
   }
 

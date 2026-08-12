@@ -1,12 +1,13 @@
 import { AsyncPipe, CommonModule, DatePipe } from '@angular/common';
 import { Component, inject } from '@angular/core';
 import { RouterLink } from '@angular/router';
-import { BehaviorSubject, combineLatest, map } from 'rxjs';
+import { BehaviorSubject, combineLatest, map, of, switchMap } from 'rxjs';
 import { BookingRecord } from '../../core/models/booking.model';
 import { EventItem } from '../../core/models/event.model';
 import { AuthService } from '../../core/services/auth.service';
 import { BookingService } from '../../core/services/booking.service';
 import { EventService } from '../../core/services/event.service';
+import { DashboardMetrics, DashboardMetricsService } from '../../core/services/dashboard-metrics.service';
 import { MATERIAL_IMPORTS } from '../../shared/material/material-imports';
 import { CurrencyGtqPipe } from '../../shared/pipes/currency-gtq.pipe';
 
@@ -646,6 +647,7 @@ export class OverviewComponent {
   private readonly auth = inject(AuthService);
   private readonly booking = inject(BookingService);
   private readonly events = inject(EventService);
+  private readonly dashboardMetrics = inject(DashboardMetricsService);
   private readonly filtersSubject = new BehaviorSubject<DashboardFilters>({
     eventId: 'all',
     category: 'all',
@@ -659,7 +661,15 @@ export class OverviewComponent {
     this.events.getEvents(),
     this.filtersSubject
   ]).pipe(
-    map(([bookings, events, filters]) => this.buildDashboard(bookings, events, filters))
+    switchMap(([bookings, events, filters]) => {
+      const visibleEvents = this.filterEvents(events, filters);
+      const dateFrom = this.periodStart(filters.period);
+      return visibleEvents.length
+        ? this.dashboardMetrics.get(visibleEvents.map((event) => event.id), dateFrom).pipe(
+            map((response) => this.buildDashboard(bookings, events, filters, response.data))
+          )
+        : of(this.buildDashboard(bookings, events, filters, null));
+    })
   );
 
   setFilter(field: keyof DashboardFilters, event: Event): void {
@@ -680,7 +690,8 @@ export class OverviewComponent {
   private buildDashboard(
     bookings: BookingRecord[],
     events: EventItem[],
-    filters: DashboardFilters
+    filters: DashboardFilters,
+    serverMetrics: DashboardMetrics | null
   ): SalesDashboardVm {
     const allEvents = [...events].sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
     const currentEvents = allEvents.filter((event) => this.isCurrentEvent(event));
@@ -696,28 +707,46 @@ export class OverviewComponent {
 
     bookings = visibleBookings;
     events = visibleEvents;
-    const totalRevenue = bookings.reduce((sum, booking) => sum + booking.totals.total, 0);
-    const soldTickets = bookings.reduce((sum, booking) => sum + booking.seats.length, 0);
-    const availableTickets = events.reduce((sum, event) => sum + event.metrics.ticketsLeft, 0);
-    const cashRevenue = bookings
-      .filter((booking) => booking.paymentMethod.startsWith('Efectivo'))
+    const paidBookings = bookings.filter((booking) =>
+      booking.status === 'confirmed' || booking.status === 'used'
+    );
+    const occupiedBookings = bookings.filter((booking) =>
+      booking.status === 'pending' || booking.status === 'confirmed' || booking.status === 'used'
+    );
+    const calculatedRevenue = paidBookings.reduce((sum, booking) => sum + booking.totals.total, 0);
+    const calculatedSoldTickets = paidBookings.reduce((sum, booking) => sum + booking.seats.length, 0);
+    const calculatedAvailableTickets = events.reduce((sum, event) => {
+      const occupied = occupiedBookings
+        .filter((booking) => booking.eventId === event.id)
+        .reduce((seatSum, booking) => seatSum + booking.seats.length, 0);
+      return sum + Math.max(event.metrics.ticketsLeft - occupied, 0);
+    }, 0);
+    const calculatedCashRevenue = paidBookings
+      .filter((booking) => this.isCashPayment(booking.paymentMethod))
       .reduce((sum, booking) => sum + booking.totals.total, 0);
+    const totalRevenue = serverMetrics?.total_revenue ?? calculatedRevenue;
+    const soldTickets = serverMetrics?.sold_tickets ?? calculatedSoldTickets;
+    const availableTickets = serverMetrics?.available_tickets ?? calculatedAvailableTickets;
+    const cashRevenue = serverMetrics?.cash_revenue ?? calculatedCashRevenue;
+    const approvedSales = serverMetrics?.approved_sales ?? paidBookings.length;
     const cardRevenue = totalRevenue - cashRevenue;
 
     const eventRows = events
       .map((event) => {
-        const eventBookings = bookings.filter((booking) => booking.eventId === event.id);
+        const eventBookings = paidBookings.filter((booking) => booking.eventId === event.id);
+        const eventOccupiedBookings = occupiedBookings.filter((booking) => booking.eventId === event.id);
         const sold = eventBookings.reduce((sum, booking) => sum + booking.seats.length, 0);
+        const occupied = eventOccupiedBookings.reduce((sum, booking) => sum + booking.seats.length, 0);
         const revenue = eventBookings.reduce((sum, booking) => sum + booking.totals.total, 0);
-        const available = event.metrics.ticketsLeft;
-        const capacity = sold + available;
+        const capacity = event.metrics.ticketsLeft;
+        const available = Math.max(capacity - occupied, 0);
 
         return {
           event,
           sold,
           available,
           revenue,
-          progress: capacity > 0 ? Math.round((sold / capacity) * 100) : 0
+          progress: capacity > 0 ? Math.round((occupied / capacity) * 100) : 0
         };
       })
       .sort((a, b) => b.revenue - a.revenue)
@@ -728,7 +757,7 @@ export class OverviewComponent {
         {
           label: 'Resumen de ventas',
           value: this.formatCurrency(totalRevenue),
-          detail: `${bookings.length} ordenes registradas`,
+          detail: `${approvedSales} ventas aprobadas`,
           icon: 'query_stats'
         },
         {
@@ -750,10 +779,10 @@ export class OverviewComponent {
           icon: 'payments'
         }
       ],
-      dailySales: this.buildDailySales(bookings),
-      paymentMethods: this.buildPaymentMethods(bookings),
+      dailySales: this.buildDailySales(paidBookings),
+      paymentMethods: this.buildPaymentMethods(paidBookings),
       eventRows,
-      recentBookings: [...bookings]
+      recentBookings: [...paidBookings]
         .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
         .slice(0, 6),
       totalRevenue,
@@ -772,6 +801,22 @@ export class OverviewComponent {
     const eventDate = new Date(event.date);
     return event.status !== 'draft' && event.status !== 'sold-out' &&
       !Number.isNaN(eventDate.getTime()) && eventDate.getTime() >= startOfToday.getTime();
+  }
+
+  private filterEvents(events: EventItem[], filters: DashboardFilters): EventItem[] {
+    const allEvents = [...events].sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
+    const hasEventFilters = filters.eventId !== 'all' || filters.category !== 'all';
+    return (hasEventFilters ? allEvents : allEvents.filter((event) => this.isCurrentEvent(event))).filter((event) =>
+      (filters.eventId === 'all' || event.id === filters.eventId) &&
+      (filters.category === 'all' || event.category === filters.category)
+    );
+  }
+
+  private periodStart(period: DashboardFilters['period']): string | undefined {
+    if (period === 'all') return undefined;
+    const date = new Date();
+    date.setDate(date.getDate() - (period === 'today' ? 0 : period === 'week' ? 6 : 29));
+    return date.toISOString().slice(0, 10);
   }
 
   private bookingMatchesPeriod(booking: BookingRecord, period: DashboardFilters['period']): boolean {
@@ -809,7 +854,7 @@ export class OverviewComponent {
 
   private buildPaymentMethods(bookings: BookingRecord[]): ChartPoint[] {
     const grouped = bookings.reduce<Record<string, number>>((acc, booking) => {
-      const label = booking.paymentMethod.startsWith('Efectivo') ? 'Efectivo' : 'Tarjeta';
+      const label = this.isCashPayment(booking.paymentMethod) ? 'Efectivo' : 'Tarjeta';
       acc[label] = (acc[label] ?? 0) + booking.totals.total;
       return acc;
     }, {});
@@ -839,5 +884,9 @@ export class OverviewComponent {
       currency: 'GTQ',
       maximumFractionDigits: 0
     }).format(value);
+  }
+
+  private isCashPayment(paymentMethod: string): boolean {
+    return paymentMethod.trim().toLocaleLowerCase('es-GT').includes('efectivo');
   }
 }

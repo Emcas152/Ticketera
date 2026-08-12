@@ -26,6 +26,7 @@ export interface SeatTable {
   y: number;
   width: number;
   height: number;
+  rotation?: number;
   seats: Seat[];
 }
 

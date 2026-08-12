@@ -11,7 +11,7 @@ import { MATERIAL_IMPORTS } from '../../material/material-imports';
   template: `
     <header class="navbar-wrap">
       <mat-toolbar class="navbar panel-surface">
-        <a routerLink="/dashboard" class="brand">
+        <a [routerLink]="dashboardUrl" class="brand">
           <img class="brand-logo" src="/assets/icons/C5952526-EC42-4BC4-8968-7F2270317160.PNG" alt="ALCON Ticket" />
           <span>
             <strong>ALCON Ticket</strong>
@@ -20,14 +20,16 @@ import { MATERIAL_IMPORTS } from '../../material/material-imports';
         </a>
 
         <nav class="desktop-links" *ngIf="auth.isLoggedIn()">
-          <a routerLink="/dashboard" routerLinkActive="is-active" [routerLinkActiveOptions]="{ exact: true }">Resumen</a>
-          <a routerLink="/dashboard/tickets" routerLinkActive="is-active">Tickets</a>
+          <a *ngIf="auth.canAccessAdmin()" routerLink="/dashboard" routerLinkActive="is-active" [routerLinkActiveOptions]="{ exact: true }">Resumen</a>
+          <a *ngIf="auth.canAccessAdmin()" routerLink="/dashboard/tickets" routerLinkActive="is-active">Tickets</a>
+          <a *ngIf="auth.canAccessAdmin()" routerLink="/dashboard/reservas" routerLinkActive="is-active">Reservas</a>
+          <a *ngIf="auth.canAuthorizeEntry()" routerLink="/dashboard/validar" routerLinkActive="is-active">Validar QR</a>
           <a routerLink="/dashboard/profile" routerLinkActive="is-active">Perfil</a>
         </nav>
 
         <div class="actions">
           <ng-container *ngIf="auth.isLoggedIn(); else guestActions">
-            <a mat-flat-button routerLink="/dashboard" class="desktop-action">Panel</a>
+            <a mat-flat-button [routerLink]="dashboardUrl" class="desktop-action">Panel</a>
             <button mat-button type="button" (click)="logout()" class="desktop-action">Salir</button>
           </ng-container>
 
@@ -42,8 +44,10 @@ import { MATERIAL_IMPORTS } from '../../material/material-imports';
 
     <mat-menu #mobileMenu="matMenu">
       <ng-container *ngIf="auth.isLoggedIn(); else guestMenu">
-        <a mat-menu-item routerLink="/dashboard">Resumen</a>
-        <a mat-menu-item routerLink="/dashboard/tickets">Tickets</a>
+        <a *ngIf="auth.canAccessAdmin()" mat-menu-item routerLink="/dashboard">Resumen</a>
+        <a *ngIf="auth.canAccessAdmin()" mat-menu-item routerLink="/dashboard/tickets">Tickets</a>
+        <a *ngIf="auth.canAccessAdmin()" mat-menu-item routerLink="/dashboard/reservas">Reservas</a>
+        <a *ngIf="auth.canAuthorizeEntry()" mat-menu-item routerLink="/dashboard/validar">Validar QR</a>
         <a mat-menu-item routerLink="/dashboard/profile">Perfil</a>
         <button mat-menu-item type="button" (click)="logout()">Salir</button>
       </ng-container>
@@ -154,6 +158,10 @@ import { MATERIAL_IMPORTS } from '../../material/material-imports';
 export class NavbarComponent {
   readonly auth = inject(AuthService);
   private readonly router = inject(Router);
+
+  get dashboardUrl(): string {
+    return this.auth.isAutorizadorOnly() ? '/dashboard/validar' : '/dashboard';
+  }
 
   logout(): void {
     this.auth.logout();

@@ -258,6 +258,7 @@ export class EventService {
 
     return {
       id: String(event.id),
+      venueId: venue?.id,
       slug: this.slugify(event.title),
       name: event.title,
       category: event.category ?? 'general',

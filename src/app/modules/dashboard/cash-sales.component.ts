@@ -1,10 +1,10 @@
 import { AsyncPipe, CommonModule } from '@angular/common';
-import { Component, OnInit, inject } from '@angular/core';
+import { Component, ElementRef, Input, OnInit, ViewChild, inject } from '@angular/core';
 import { NonNullableFormBuilder, ReactiveFormsModule, Validators } from '@angular/forms';
 import { finalize, forkJoin, map, take } from 'rxjs';
 import { BookingRecord } from '../../core/models/booking.model';
 import { EventItem } from '../../core/models/event.model';
-import { Seat, SeatMap } from '../../core/models/seat.model';
+import { Seat, SeatMap, SeatTable } from '../../core/models/seat.model';
 import { BookingService } from '../../core/services/booking.service';
 import { EventService } from '../../core/services/event.service';
 import { NotificationService } from '../../core/services/notification.service';
@@ -19,8 +19,8 @@ import { CurrencyGtqPipe } from '../../shared/pipes/currency-gtq.pipe';
   imports: [CommonModule, AsyncPipe, ReactiveFormsModule, CurrencyGtqPipe, ...MATERIAL_IMPORTS],
   template: `
     <section class="admin-shell">
-      <div class="admin-header"><div><p class="eyebrow">Emisión administrativa</p><h1>Crear entradas</h1>
-        <p class="admin-subtitle">Selecciona asientos libres del mapa y emite entradas en efectivo o de cortesía.</p></div></div>
+      <div class="admin-header"><div><p class="eyebrow">Emisión administrativa</p><h1>{{ courtesyMode ? 'Asignar cortesías' : 'Venta en efectivo' }}</h1>
+        <p class="admin-subtitle">{{ courtesyMode ? 'Selecciona asientos individuales o una mesa completa. Cada asiento se reservará individualmente.' : 'Selecciona asientos libres del mapa y emite entradas pagadas en efectivo.' }}</p></div></div>
 
       <form class="panel-surface controls" [formGroup]="form" (ngSubmit)="issue()">
         <mat-form-field appearance="outline"><mat-label>Evento</mat-label>
@@ -28,9 +28,11 @@ import { CurrencyGtqPipe } from '../../shared/pipes/currency-gtq.pipe';
             @for (event of (events$ | async) ?? []; track event.id) { <mat-option [value]="event.id">{{ event.name }}</mat-option> }
           </mat-select>
         </mat-form-field>
-        <mat-form-field appearance="outline"><mat-label>Tipo de entrada</mat-label><mat-select formControlName="type">
-          <mat-option value="cash">Entrada en efectivo</mat-option><mat-option value="courtesy">Entrada de cortesía</mat-option>
-        </mat-select></mat-form-field>
+        @if (!courtesyMode) {
+          <mat-form-field appearance="outline"><mat-label>Tipo de entrada</mat-label><mat-select formControlName="type">
+            <mat-option value="cash">Entrada en efectivo</mat-option>
+          </mat-select></mat-form-field>
+        }
         <mat-form-field appearance="outline"><mat-label>Cliente / beneficiario</mat-label><input matInput formControlName="customerName" /></mat-form-field>
         <mat-form-field appearance="outline"><mat-label>Número de teléfono</mat-label>
           <input matInput formControlName="customerPhone" type="tel" inputmode="tel" autocomplete="tel" maxlength="30" placeholder="Ej. +502 5555 5555" />
@@ -39,7 +41,7 @@ import { CurrencyGtqPipe } from '../../shared/pipes/currency-gtq.pipe';
         <div class="summary"><span>{{ selectedSeats.length }} asiento(s)</span><strong>{{ total | currencyGtq }}</strong></div>
         <button mat-flat-button color="primary" type="submit" [disabled]="processing || !seatMap || selectedSeats.length === 0">
           <mat-icon>{{ form.controls.type.value === 'cash' ? 'point_of_sale' : 'card_giftcard' }}</mat-icon>
-          {{ processing ? 'Generando...' : 'Generar entrada' }}
+          {{ processing ? 'Generando...' : (courtesyMode ? 'Asignar cortesías' : 'Generar entrada') }}
         </button>
       </form>
 
@@ -53,11 +55,24 @@ import { CurrencyGtqPipe } from '../../shared/pipes/currency-gtq.pipe';
         </div>
         <div class="legend"><i></i> Libre <i class="selected"></i> Seleccionado <i class="reserved"></i> Reservado <i class="sold"></i> Vendido</div>
 
-        <div class="venue-viewport" *ngIf="seatMap as map"><div class="venue-map" [style.aspect-ratio]="map.width + ' / ' + map.height">
-          <svg [attr.viewBox]="'0 0 ' + map.width + ' ' + map.height" role="group" [attr.aria-label]="'Mapa de asientos de ' + map.venueName">
+        <div class="section-chips" *ngIf="seatMap">
+          @for (section of selectableSections; track section.id) {
+            <button class="chip" type="button" [class.active]="activeSectionId === section.id"
+              (click)="toggleSection(section.id)">
+              <span class="chip-dot" [style.background]="section.color"></span>{{ section.name }}
+            </button>
+          }
+        </div>
+
+        <div #viewport class="venue-viewport" *ngIf="seatMap as map">
+          <svg #svgContainer class="venue-map" [attr.viewBox]="viewBoxX + ' ' + viewBoxY + ' ' + viewBoxW + ' ' + viewBoxH"
+            preserveAspectRatio="xMidYMid meet" role="group" [attr.aria-label]="'Mapa de asientos de ' + map.venueName"
+            (wheel)="onWheel($event)" (mousedown)="onMouseDown($event)" (mousemove)="onMouseMove($event)"
+            (mouseup)="onMouseUp()" (mouseleave)="onMouseUp()">
+            <rect x="-250" y="-250" [attr.width]="map.width + 500" [attr.height]="map.height + 500" fill="#a8a8a8" />
             @for (lane of map.lanes ?? []; track lane.id) { <rect [attr.x]="lane.x" [attr.y]="lane.y" [attr.width]="lane.width" [attr.height]="lane.height" [attr.fill]="lane.fill" /> }
             @for (element of layoutElements; track element.id) {
-              <g [attr.transform]="elementTransform(element)" class="plan-element">
+              <g [attr.transform]="elementTransform(element)" class="plan-element" [attr.opacity]="element.kind === 'zone' && activeSectionId && sectionId(element.label) !== activeSectionId ? .25 : 1">
                 @switch (element.kind) {
                   @case ('stage') { <rect [attr.width]="element.w" [attr.height]="element.h" rx="6" [attr.fill]="element.color" /><rect x="45" y="0" width="24" [attr.height]="element.h" fill="#f8fafc" opacity=".92" /><rect [attr.x]="element.w - 70" y="0" width="24" [attr.height]="element.h" fill="#f8fafc" opacity=".92" /><text [attr.x]="element.w / 2" [attr.y]="element.h / 2 + 13" text-anchor="middle" class="stage-label">{{ element.label }}</text> }
                   @case ('bathrooms') { <rect [attr.width]="element.w" [attr.height]="element.h" rx="5" [attr.fill]="element.color" /><text [attr.x]="element.w / 2" y="42" text-anchor="middle" class="bathroom-title">{{ element.label }}</text><text [attr.x]="element.w * .36" [attr.y]="element.h - 44" text-anchor="middle" class="bathroom-icon">W</text><text [attr.x]="element.w * .68" [attr.y]="element.h - 44" text-anchor="middle" class="bathroom-icon">M</text> }
@@ -68,22 +83,27 @@ import { CurrencyGtqPipe } from '../../shared/pipes/currency-gtq.pipe';
             }
             <g class="stage" *ngIf="layoutElements.length === 0"><rect [attr.x]="map.stage.x" [attr.y]="map.stage.y" [attr.width]="map.stage.width" [attr.height]="map.stage.height" rx="8" />
               <text [attr.x]="map.stage.x + map.stage.width / 2" [attr.y]="map.stage.y + map.stage.height / 2" text-anchor="middle" dominant-baseline="middle">{{ map.stage.label }}</text></g>
-            @for (table of map.tables; track table.id) { <g class="table" [attr.transform]="'rotate(' + (table.rotation ?? 0) + ' ' + (table.x + table.width / 2) + ' ' + (table.y + table.height / 2) + ')'"> <rect [attr.x]="table.x" [attr.y]="table.y" [attr.width]="table.width" [attr.height]="table.height" rx="4" [ngClass]="tableClass(table.sectionName)" />
+            @for (table of map.tables; track table.id) { <g class="table" [class.table-selectable]="courtesyMode" [class.table-selected]="isTableSelected(table)" [class.inactive]="activeSectionId && activeSectionId !== table.sectionId" [attr.transform]="'rotate(' + (table.rotation ?? 0) + ' ' + (table.x + table.width / 2) + ' ' + (table.y + table.height / 2) + ')'" (click)="selectTable(table, $event)"> <rect [attr.x]="table.x" [attr.y]="table.y" [attr.width]="table.width" [attr.height]="table.height" rx="4" [ngClass]="tableClass(table.sectionName)" />
               <text [attr.x]="table.x + table.width / 2" [attr.y]="table.y + table.height / 2" text-anchor="middle" dominant-baseline="middle">{{ table.label }}</text></g>
               @if (isRowStart(table.label)) { <g class="row-marker" [attr.transform]="'translate(' + (table.x - 62) + ' ' + (table.y + table.height / 2) + ')'" pointer-events="none"><circle r="15"/><text x="0" y="1" text-anchor="middle" dominant-baseline="middle">{{ rowNumber(table.label) }}</text></g> }
             }
             @for (seat of allSeats; track seat.id) {
-              <g class="seat" [class.selected]="isSelected(seat)" [class.reserved]="seat.status === 'reserved'"
+              <g class="seat" [class.selected]="isSelected(seat)" [class.inactive]="activeSectionId && activeSectionId !== seat.sectionId && !isSelected(seat)" [class.reserved]="seat.status === 'reserved'"
                 [class.sold]="seat.status === 'sold'" [class.validating]="validatingSeatId === seat.id" [ngClass]="seatSectionClass(seat)"
                 [attr.role]="isAvailable(seat) || isSelected(seat) ? 'button' : 'img'" [attr.tabindex]="isAvailable(seat) || isSelected(seat) ? 0 : null"
                 [attr.aria-label]="seat.section + ', asiento ' + seat.label + ', ' + (isSelected(seat) ? 'seleccionado' : isAvailable(seat) ? 'disponible' : 'no disponible')"
-                (click)="toggleSeat(seat)" (keydown.enter)="toggleSeat(seat)" (keydown.space)="toggleSeat(seat); $event.preventDefault()">
+                (click)="$event.stopPropagation(); toggleSeat(seat)" (keydown.enter)="toggleSeat(seat)" (keydown.space)="toggleSeat(seat); $event.preventDefault()">
                 <circle [attr.cx]="seat.x" [attr.cy]="seat.y" [attr.r]="seat.radius || 12"><title>{{ seat.section }} · {{ seat.label }}</title></circle>
                 <text [attr.x]="seat.x" [attr.y]="seat.y + 1" text-anchor="middle" dominant-baseline="middle">{{ seat.number }}</text>
               </g>
             }
           </svg>
-        </div></div>
+          <div class="map-controls-bar">
+            <button type="button" class="control-btn center-btn" (click)="resetView()">Centrar</button>
+            <button type="button" class="control-btn zoom-icon-btn" (click)="zoomIn()" aria-label="Acercar">+</button>
+            <button type="button" class="control-btn zoom-icon-btn" (click)="zoomOut()" aria-label="Alejar">&minus;</button>
+          </div>
+        </div>
       </article>
 
       <article class="panel-surface ticket-result" *ngIf="lastBooking"><div><p class="eyebrow">Entrada generada</p><h2>{{ lastBooking.eventName }}</h2>
@@ -97,16 +117,21 @@ import { CurrencyGtqPipe } from '../../shared/pipes/currency-gtq.pipe';
     .summary{display:grid;min-width:120px}.summary span,.map-heading p,.ticket-result p{margin:0;color:var(--text-muted);font-size:.82rem}.summary strong{color:var(--brand-primary);font-size:1.15rem}
     .map-panel{padding:18px}.map-heading,.ticket-result,.map-actions{display:flex;justify-content:space-between;align-items:center;gap:12px}
     .legend{display:flex;align-items:center;gap:6px;margin-top:10px;color:var(--text-muted);font-size:.76rem}.legend i{width:12px;height:12px;border-radius:50%;background:#22c55e}.legend i.selected{background:#7c3aed}.legend i.reserved{background:#f59e0b}.legend i.sold{background:#ef4444}
-    .venue-viewport{margin-top:16px;height:620px;overflow:auto;border:1px solid #d8dee8;border-radius:14px;background:#d4d4d8}.venue-map{width:min(100%,900px);min-width:680px;margin:auto;background:#a8a8a8}svg{display:block;width:100%;height:100%}
-    .stage rect{fill:#111827}.stage text,.stage-label{fill:#fff7ed;font-weight:900;font-size:34px}.table rect{stroke:rgba(255,255,255,.58);stroke-width:1.5;filter:drop-shadow(0 3px 6px rgba(0,0,0,.22))}.table text{fill:#fff;font-size:11px;font-weight:800;pointer-events:none}.table-diamante{fill:#0b2c6b}.table-vip{fill:#e85d04}.table-general{fill:#008c95}
+    .section-chips{display:flex;flex-wrap:wrap;gap:8px;margin-top:14px}.chip{display:inline-flex;align-items:center;gap:8px;padding:7px 16px;border-radius:20px;cursor:pointer;background:#f8fafc;border:1.5px solid #cbd5e1;color:#334155;font-size:.82rem;font-weight:700}.chip:hover,.chip.active{border-color:#7c3aed;background:#f3e8ff;color:#5b21b6}.chip-dot{width:10px;height:10px;border-radius:50%}
+    .venue-viewport{position:relative;margin-top:16px;height:720px;overflow:hidden;border:1px solid #d8dee8;border-radius:14px;background:#a8a8a8;cursor:grab;touch-action:none;user-select:none}.venue-map{display:block;width:100%;height:100%;background:#a8a8a8}.venue-viewport:active{cursor:grabbing}
+    .stage rect{fill:#111827}.stage text,.stage-label{fill:#fff7ed;font-weight:900;font-size:34px}.table rect{stroke:rgba(255,255,255,.58);stroke-width:1.5;filter:drop-shadow(0 3px 6px rgba(0,0,0,.22))}.table text{fill:#fff;font-size:11px;font-weight:800;pointer-events:none}.table-selectable{cursor:pointer}.table-selectable:hover rect{stroke:#ffe066;stroke-width:3}.table-selected rect{stroke:#ffe066;stroke-width:4;filter:drop-shadow(0 0 10px #ffe066)}.table-diamante{fill:#0b2c6b}.table-vip{fill:#e85d04}.table-general{fill:#008c95}
     .map-zone{fill:rgba(69,255,25,.04);stroke-width:2.5;stroke-dasharray:12 8}.zone-diamante{fill:rgba(9,31,73,.07);stroke:rgba(9,31,73,.72)}.zone-vip{fill:rgba(204,82,0,.06);stroke:rgba(204,82,0,.68)}.zone-general{fill:rgba(0,128,128,.06);stroke:rgba(0,128,128,.68)}.zone-default{stroke:rgba(69,255,25,.42)}.zone-label{fill:#fff;stroke-width:8;paint-order:stroke;font-size:27px;font-weight:900;letter-spacing:.11em}.label-diamante{stroke:#091f49}.label-vip{stroke:#c94e00}.label-general{stroke:#007b82}.label-default{stroke:#1e293b}.row-marker circle{fill:#0f172a;stroke:rgba(255,255,255,.78);stroke-width:1.5}.row-marker text{fill:#fff;font-size:11px;font-weight:800}.entry-label,.bathroom-title{font-weight:900}.entry-label{font-size:42px;fill:#020617}.bathroom-title{font-size:30px;fill:#fff}.bathroom-icon{font-size:44px;font-weight:900;fill:#fff}
     .seat{cursor:pointer;outline:none}.seat circle{stroke:rgba(255,255,255,.24);stroke-width:1;transition:.15s}.seat.seat-diamante circle{fill:#091f49}.seat.seat-vip circle{fill:#e06000}.seat.seat-general circle{fill:#008080}.seat text{fill:#fff;font-size:8px;font-weight:800;pointer-events:none}.seat:hover circle,.seat:focus circle{filter:brightness(1.15);stroke:#fff;stroke-width:2.5}
-    .seat.selected circle{fill:#8b5cf6;stroke:#4c1d95}.seat.selected text,.seat.reserved text,.seat.sold text{fill:white}.seat.reserved,.seat.sold{cursor:not-allowed}.seat.reserved circle{fill:#f59e0b;stroke:#92400e}.seat.sold circle{fill:#ef4444;stroke:#991b1b}.seat.validating{pointer-events:none;opacity:.55}
+    .seat.selected circle{fill:#ffe066;stroke:#111827;stroke-width:2}.seat.selected text{fill:#111827}.seat.reserved text,.seat.sold text{fill:white}.seat.reserved,.seat.sold{cursor:not-allowed}.seat.reserved circle{fill:#f59e0b;stroke:#92400e}.seat.sold circle{fill:#ef4444;stroke:#991b1b}.seat.validating{pointer-events:none;opacity:.55}.seat.inactive,.table.inactive{opacity:.25}.seat.selected{opacity:1}
+    .map-controls-bar{position:absolute;bottom:16px;right:16px;z-index:20;display:flex;border-radius:6px;overflow:hidden;background:#18181b;box-shadow:0 4px 12px rgba(0,0,0,.35)}.control-btn{height:36px;border:0;background:#18181b;color:#fff;font-weight:700;cursor:pointer}.control-btn:hover{background:#27272a}.center-btn{padding:0 16px;font-size:12px;text-transform:uppercase;letter-spacing:.14em;border-right:1px solid rgba(255,255,255,.15)}.zoom-icon-btn{width:36px;font-size:18px;border-right:1px solid rgba(255,255,255,.15)}
     .live-status{display:flex;align-items:center;gap:6px;color:#166534;font-size:.78rem;font-weight:700}.live-status i{width:8px;height:8px;border-radius:50%;background:#22c55e;box-shadow:0 0 0 4px rgba(34,197,94,.16)}
     .ticket-result{margin-top:18px;padding:20px}.ticket-result h2{margin:4px 0}@media(max-width:1100px){.controls{grid-template-columns:1fr 1fr}.controls mat-form-field:first-child{grid-column:1/-1}}@media(max-width:700px){.controls{grid-template-columns:1fr}.controls mat-form-field:first-child{grid-column:auto}.map-heading,.ticket-result{align-items:flex-start;flex-direction:column}.venue-viewport{height:520px}}
   `]
 })
 export class CashSalesComponent implements OnInit {
+  @Input() mode: 'cash' | 'courtesy' = 'cash';
+  @ViewChild('viewport') private viewportRef?: ElementRef<HTMLDivElement>;
+  @ViewChild('svgContainer') private svgContainerRef?: ElementRef<SVGSVGElement>;
   private readonly fb = inject(NonNullableFormBuilder);
   private readonly events = inject(EventService);
   private readonly booking = inject(BookingService);
@@ -130,8 +155,21 @@ export class CashSalesComponent implements OnInit {
   validatingSeatId: string | null = null;
   layoutElements: LayoutElement[] = [];
   private venueMapConfig: VenueSeatMap | null = null;
+  activeSectionId: string | null = null;
+  viewBoxX = 0;
+  viewBoxY = 0;
+  viewBoxW = 1900;
+  viewBoxH = 2120;
+  isPanning = false;
+  private startPanX = 0;
+  private startPanY = 0;
 
-  ngOnInit(): void { this.events.getEvents().subscribe(); }
+  ngOnInit(): void {
+    this.form.controls.type.setValue(this.courtesyMode ? 'courtesy' : 'cash');
+    this.events.getEvents().subscribe();
+  }
+
+  get courtesyMode(): boolean { return this.mode === 'courtesy'; }
 
   get allSeats(): Seat[] {
     if (!this.seatMap) return [];
@@ -140,6 +178,7 @@ export class CashSalesComponent implements OnInit {
     return [...unique.values()];
   }
   get availableCount(): number { return this.allSeats.filter((seat) => this.isAvailable(seat)).length; }
+  get selectableSections() { return this.seatMap?.sections ?? []; }
   get total(): number { return this.form.controls.type.value === 'courtesy' ? 0 : this.booking.getTotals(this.selectedSeats).total; }
 
   loadEvent(): void {
@@ -166,9 +205,11 @@ export class CashSalesComponent implements OnInit {
   private applySeatMap(map: SeatMap | undefined): void {
     if (!map || String(map.eventId) !== String(this.form.controls.eventId.value)) return;
     this.seatMap = this.applySavedLayout(map);
+    if (this.activeSectionId && !this.seatMap.sections.some((section) => section.id === this.activeSectionId)) this.activeSectionId = null;
     const currentSeats = this.allSeats;
     const availableIds = new Set(currentSeats.filter((seat) => this.isAvailable(seat)).map((seat) => seat.id));
     this.selectedSeats = this.selectedSeats.filter((seat) => availableIds.has(seat.id)).map((seat) => currentSeats.find((fresh) => fresh.id === seat.id) ?? seat);
+    this.resetView();
   }
 
   private applySavedLayout(map: SeatMap): SeatMap {
@@ -204,7 +245,7 @@ export class CashSalesComponent implements OnInit {
   zoneLabelClass(label: string): string { return this.zoneClass(label).replace('zone-', 'label-'); }
   isRowStart(label: string): boolean { const value = Number(label); return Number.isFinite(value) && (value - 1) % 10 === 0; }
   rowNumber(label: string): number { return Math.floor((Number(label) - 1) / 10) + 1; }
-  private sectionId(name: string): string { return name.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, ''); }
+  sectionId(name: string): string { return name.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, ''); }
   private sectionPrice(sectionName: string, seatPrice?: number): number {
     const configuredSections = (this.venueMapConfig?.sections ?? []) as ConfiguredSection[];
     const configured = configuredSections.find((section) => section.name?.trim().toLowerCase() === sectionName.trim().toLowerCase());
@@ -215,6 +256,42 @@ export class CashSalesComponent implements OnInit {
 
   isAvailable(seat: Seat): boolean { return seat.status === 'available' || seat.status === 'selected'; }
   isSelected(seat: Seat): boolean { return this.selectedSeats.some((item) => item.id === seat.id); }
+  isTableSelected(table: SeatTable): boolean {
+    const availableSeats = table.seats.filter((seat) => this.isAvailable(seat));
+    return availableSeats.length > 0 && availableSeats.every((seat) => this.isSelected(seat));
+  }
+
+  selectTable(table: SeatTable, event: Event): void {
+    if (!this.courtesyMode) return;
+    event.stopPropagation();
+    const selectable = table.seats.filter((seat) => this.isAvailable(seat));
+    if (selectable.length === 0) {
+      this.notifications.info(`La mesa ${table.label} no tiene asientos disponibles.`);
+      return;
+    }
+    if (selectable.every((seat) => this.isSelected(seat))) {
+      const tableSeatIds = new Set(table.seats.map((seat) => seat.id));
+      this.selectedSeats = this.selectedSeats.filter((seat) => !tableSeatIds.has(seat.id));
+      return;
+    }
+    if (this.validatingSeatId) return;
+    this.validatingSeatId = `table:${table.id}`;
+    this.booking.getSeatMap(this.form.controls.eventId.value).pipe(finalize(() => this.validatingSeatId = null)).subscribe((map) => {
+      this.applySeatMap(map);
+      const freshTable = this.seatMap?.tables.find((item) => item.id === table.id || item.label === table.label);
+      const freshAvailable = freshTable?.seats.filter((seat) => this.isAvailable(seat)) ?? [];
+      if (freshAvailable.length === 0) {
+        this.notifications.info(`La mesa ${table.label} ya no tiene asientos disponibles.`);
+        return;
+      }
+      const selectedIds = new Set(this.selectedSeats.map((seat) => seat.id));
+      this.selectedSeats = [...this.selectedSeats, ...freshAvailable.filter((seat) => !selectedIds.has(seat.id))];
+      this.activeSectionId = freshTable?.sectionId ?? null;
+      if (freshAvailable.length < table.seats.length) {
+        this.notifications.info(`Se seleccionaron ${freshAvailable.length} asientos disponibles de la mesa ${table.label}.`);
+      }
+    });
+  }
   toggleSeat(seat: Seat): void {
     if (this.isSelected(seat)) {
       this.selectedSeats = this.selectedSeats.filter((item) => item.id !== seat.id);
@@ -232,8 +309,55 @@ export class CashSalesComponent implements OnInit {
         return;
       }
       this.selectedSeats = [...this.selectedSeats, freshSeat];
+      this.activeSectionId = freshSeat.sectionId;
     });
   }
+
+  toggleSection(sectionId: string): void { this.activeSectionId = this.activeSectionId === sectionId ? null : sectionId; }
+
+  resetView(): void {
+    const map = this.seatMap;
+    const tables = map?.tables ?? [];
+    if (!map || tables.length === 0) {
+      this.viewBoxX = 0; this.viewBoxY = 0; this.viewBoxW = map?.width || 1900; this.viewBoxH = map?.height || 2120;
+      return;
+    }
+    const minX = Math.min(0, ...tables.map((table) => table.x - 100));
+    const minY = Math.min(0, ...tables.map((table) => table.y - 100));
+    const maxX = Math.max(map.width, ...tables.map((table) => table.x + table.width + 100));
+    const maxY = Math.max(map.height, ...tables.map((table) => table.y + table.height + 100));
+    this.viewBoxX = minX; this.viewBoxY = minY; this.viewBoxW = maxX - minX; this.viewBoxH = maxY - minY;
+  }
+
+  zoomIn(): void { this.zoomAt(1); }
+  zoomOut(): void { this.zoomAt(-1); }
+  onWheel(event: WheelEvent): void { event.preventDefault(); this.zoomAt(event.deltaY < 0 ? 1 : -1, event.clientX, event.clientY); }
+  private zoomAt(direction: number, clientX?: number, clientY?: number): void {
+    const svg = this.svgContainerRef?.nativeElement;
+    if (!svg) return;
+    const factor = direction > 0 ? .86 : 1.16;
+    const newW = this.viewBoxW * factor;
+    const newH = this.viewBoxH * factor;
+    if (newW < 320 || newW > 5000) return;
+    const rect = svg.getBoundingClientRect();
+    const ratioX = clientX == null ? .5 : (clientX - rect.left) / rect.width;
+    const ratioY = clientY == null ? .5 : (clientY - rect.top) / rect.height;
+    this.viewBoxX += (this.viewBoxW - newW) * ratioX; this.viewBoxY += (this.viewBoxH - newH) * ratioY;
+    this.viewBoxW = newW; this.viewBoxH = newH;
+  }
+  onMouseDown(event: MouseEvent): void {
+    if ((event.target as SVGElement | null)?.closest('.seat, .table')) return;
+    event.preventDefault(); this.isPanning = true; this.startPanX = event.clientX; this.startPanY = event.clientY;
+  }
+  onMouseMove(event: MouseEvent): void {
+    const svg = this.svgContainerRef?.nativeElement;
+    if (!this.isPanning || !svg) return;
+    const rect = svg.getBoundingClientRect();
+    this.viewBoxX -= (event.clientX - this.startPanX) * this.viewBoxW / rect.width;
+    this.viewBoxY -= (event.clientY - this.startPanY) * this.viewBoxH / rect.height;
+    this.startPanX = event.clientX; this.startPanY = event.clientY;
+  }
+  onMouseUp(): void { this.isPanning = false; }
 
   issue(): void {
     if (this.form.invalid || !this.selectedEvent || this.selectedSeats.length === 0 || this.processing) return;

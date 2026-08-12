@@ -20,6 +20,11 @@ export interface AdminBooking {
   customer_phone?: string | null;
   phone?: string | null;
   telefono?: string | null;
+  nit?: string | null;
+  invoice_nit?: string | null;
+  invoice?: {
+    nit?: string | null;
+  };
   customer?: {
     id: number | null;
     name: string | null;
@@ -27,14 +32,33 @@ export interface AdminBooking {
     phone?: string | null;
     telefono?: string | null;
     customer_phone?: string | null;
+    nit?: string | null;
   };
   event?: {
     id: number;
     title: string;
   };
   seats: AdminBookingSeat[];
-  payments: unknown[];
+  payments: AdminBookingPayment[];
   tickets: unknown[];
+}
+
+export interface AdminBookingPayment {
+  id?: number | string;
+  status?: string | null;
+  estado?: string | null;
+  estado_pago?: string | null;
+  iso_response_code?: string | number | null;
+  response_code?: string | number | null;
+  response_message?: string | null;
+  message?: string | null;
+  gateway_response?: unknown;
+  response?: unknown;
+  callback_response?: unknown;
+  metadata?: Record<string, unknown> | string | null;
+  nit?: string | null;
+  created_at?: string | null;
+  updated_at?: string | null;
 }
 
 export interface AdminBookingSeat {

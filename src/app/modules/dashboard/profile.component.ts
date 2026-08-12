@@ -1,7 +1,7 @@
 import { CommonModule } from '@angular/common';
 import { Component, DestroyRef, inject } from '@angular/core';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
-import { NonNullableFormBuilder, ReactiveFormsModule, Validators } from '@angular/forms';
+import { NonNullableFormBuilder, ReactiveFormsModule } from '@angular/forms';
 import { AuthService } from '../../core/services/auth.service';
 import { MATERIAL_IMPORTS } from '../../shared/material/material-imports';
 
@@ -14,7 +14,8 @@ import { MATERIAL_IMPORTS } from '../../shared/material/material-imports';
       <p class="eyebrow">Administrador</p>
       <h1>Perfil del administrador</h1>
 
-      <form class="profile-form" [formGroup]="form" (ngSubmit)="submit()">
+      <p>Los datos del perfil provienen de la cuenta administrada por la API.</p>
+      <form class="profile-form" [formGroup]="form">
         <mat-form-field appearance="outline">
           <mat-label>Nombre completo</mat-label>
           <input matInput formControlName="fullName" />
@@ -35,7 +36,6 @@ import { MATERIAL_IMPORTS } from '../../shared/material/material-imports';
           <input matInput formControlName="city" />
         </mat-form-field>
 
-        <button mat-flat-button type="submit">Guardar cambios</button>
       </form>
     </section>
   `,
@@ -64,8 +64,8 @@ export class ProfileComponent {
   private readonly auth = inject(AuthService);
   private readonly destroyRef = inject(DestroyRef);
   readonly form = this.fb.group({
-    fullName: ['', [Validators.required]],
-    email: ['', [Validators.required, Validators.email]],
+    fullName: [''],
+    email: [''],
     phone: [''],
     city: ['']
   });
@@ -74,16 +74,8 @@ export class ProfileComponent {
     this.auth.user$.pipe(takeUntilDestroyed(this.destroyRef)).subscribe((user) => {
       if (user) {
         this.form.patchValue(user);
+        this.form.disable();
       }
     });
-  }
-
-  submit(): void {
-    if (this.form.invalid) {
-      this.form.markAllAsTouched();
-      return;
-    }
-
-    this.auth.updateProfile(this.form.getRawValue()).subscribe();
   }
 }

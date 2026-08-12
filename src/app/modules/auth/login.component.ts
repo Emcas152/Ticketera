@@ -117,13 +117,15 @@ export class LoginComponent {
       finalize(() => this.submitting.set(false))
     ).subscribe({
       next: () => {
-        if (!this.auth.canAccessAdmin()) {
+        if (!this.auth.canAccessDashboard()) {
           this.auth.logout(false);
           this.responseMessage.set('Tu usuario no tiene permisos para acceder al panel administrativo.');
           return;
         }
 
-        const returnUrl = this.route.snapshot.queryParamMap.get('returnUrl') ?? '/dashboard';
+        const returnUrl =
+          this.route.snapshot.queryParamMap.get('returnUrl') ??
+          (this.auth.isAutorizadorOnly() ? '/dashboard/validar' : '/dashboard');
         this.router.navigateByUrl(returnUrl);
       },
       error: (error: HttpErrorResponse) => {

@@ -5,6 +5,6 @@ export interface User {
   email: string;
   phone?: string;
   city?: string;
-  membershipTier: 'Core' | 'Prime' | 'Elite';
+  membershipTier?: 'Core' | 'Prime' | 'Elite';
   avatarUrl?: string;
 }
