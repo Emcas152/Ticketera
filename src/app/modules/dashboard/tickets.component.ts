@@ -23,6 +23,8 @@ interface TicketRow {
   canDownload: boolean;
 }
 
+type TicketSortKey = 'id' | 'eventName' | 'eventDate' | 'bookingReference' | 'section' | 'status' | 'ticketType' | 'bookingTotal';
+
 @Component({
   selector: 'app-tickets',
   standalone: true,
@@ -74,24 +76,41 @@ interface TicketRow {
             </div>
           </div>
 
+          <div class="datatable-toolbar">
+            <label class="search-box">
+              <mat-icon>search</mat-icon>
+              <input type="search" placeholder="Buscar por evento, reserva, asiento, estado..."
+                [value]="searchTerm" (input)="setSearch($event)" />
+              @if (searchTerm) {
+                <button type="button" aria-label="Limpiar búsqueda" (click)="clearSearch()"><mat-icon>close</mat-icon></button>
+              }
+            </label>
+            <label class="page-size">Mostrar
+              <select [value]="pageSize" (change)="setPageSize($event)">
+                <option value="10">10</option><option value="25">25</option>
+                <option value="50">50</option><option value="100">100</option>
+              </select> filas
+            </label>
+          </div>
+
           <div class="tkt-table-wrap">
             <table class="tkt-table">
               <thead>
                 <tr>
-                  <th class="col-id">#</th>
-                  <th class="col-event">Evento</th>
-                  <th class="col-date">Fecha</th>
-                  <th class="col-booking">Reserva</th>
+                  <th class="col-id sortable" (click)="sortBy('id')"># <mat-icon>{{ sortIcon('id') }}</mat-icon></th>
+                  <th class="col-event sortable" (click)="sortBy('eventName')">Evento <mat-icon>{{ sortIcon('eventName') }}</mat-icon></th>
+                  <th class="col-date sortable" (click)="sortBy('eventDate')">Fecha <mat-icon>{{ sortIcon('eventDate') }}</mat-icon></th>
+                  <th class="col-booking sortable" (click)="sortBy('bookingReference')">Reserva <mat-icon>{{ sortIcon('bookingReference') }}</mat-icon></th>
                   <th class="col-seat">Sección / Asiento</th>
                   <th class="col-qr">QR Code</th>
-                  <th class="col-status">Estado</th>
-                  <th class="col-type">Tipo</th>
-                  <th class="col-total">Total</th>
+                  <th class="col-status sortable" (click)="sortBy('status')">Estado <mat-icon>{{ sortIcon('status') }}</mat-icon></th>
+                  <th class="col-type sortable" (click)="sortBy('ticketType')">Tipo <mat-icon>{{ sortIcon('ticketType') }}</mat-icon></th>
+                  <th class="col-total sortable" (click)="sortBy('bookingTotal')">Total <mat-icon>{{ sortIcon('bookingTotal') }}</mat-icon></th>
                   <th class="col-actions">Acciones</th>
                 </tr>
               </thead>
               <tbody>
-                @for (ticket of tickets; track ticket.id; let even = $even) {
+                @for (ticket of pagedTickets; track ticket.id; let even = $even) {
                 <tr [class.row-even]="even" [class.row-used]="ticket.status === 'used' || ticket.status === 'usado'"
                     [class.row-cancelled]="ticket.status === 'cancelled' || ticket.status === 'cancelado'">
                   <td class="col-id td-id">
@@ -160,6 +179,14 @@ interface TicketRow {
                 }
               </tbody>
             </table>
+          </div>
+          <div class="datatable-footer">
+            <span>{{ resultStart }}-{{ resultEnd }} de {{ filteredTickets.length }} registros</span>
+            <div class="pager">
+              <button type="button" [disabled]="page === 1" (click)="goToPage(page - 1)"><mat-icon>chevron_left</mat-icon></button>
+              <span>Página {{ page }} de {{ totalPages }}</span>
+              <button type="button" [disabled]="page === totalPages" (click)="goToPage(page + 1)"><mat-icon>chevron_right</mat-icon></button>
+            </div>
           </div>
         </article>
       }
@@ -272,6 +299,27 @@ interface TicketRow {
       overflow-x: auto;
       overflow-y: visible;
     }
+    .datatable-toolbar, .datatable-footer {
+      display: flex; align-items: center; justify-content: space-between;
+      gap: 16px; padding: 10px 14px; background: #fff;
+    }
+    .datatable-toolbar { border-bottom: 1px solid var(--surface-border); }
+    .datatable-footer { border-top: 1px solid var(--surface-border); font-size: .74rem; color: var(--text-muted); }
+    .search-box {
+      display: flex; align-items: center; gap: 7px; min-width: 320px;
+      max-width: 520px; flex: 1; border: 1px solid var(--surface-border);
+      border-radius: 8px; padding: 6px 10px;
+    }
+    .search-box:focus-within { border-color: var(--brand-primary); box-shadow: 0 0 0 2px rgba(106,0,255,.08); }
+    .search-box mat-icon { font-size: 19px; width: 19px; height: 19px; color: var(--text-muted); }
+    .search-box input { border: 0; outline: 0; width: 100%; font: inherit; background: transparent; }
+    .search-box button, .pager button { border: 0; background: transparent; display: grid; place-items: center; cursor: pointer; color: var(--brand-primary); }
+    .page-size { display: flex; align-items: center; gap: 7px; font-size: .75rem; color: var(--text-muted); }
+    .page-size select { border: 1px solid var(--surface-border); border-radius: 6px; padding: 5px 8px; background: white; }
+    .pager { display: flex; align-items: center; gap: 10px; }
+    .pager button:disabled { opacity: .3; cursor: default; }
+    .sortable { cursor: pointer; user-select: none; }
+    .sortable mat-icon { font-size: 14px; width: 14px; height: 14px; vertical-align: middle; }
 
     /* ── Table ────────────────────────────────── */
     .tkt-table {
@@ -512,6 +560,11 @@ interface TicketRow {
       from { transform: rotate(0deg); }
       to   { transform: rotate(360deg); }
     }
+    @media (max-width: 700px) {
+      .datatable-toolbar { align-items: stretch; flex-direction: column; }
+      .search-box { min-width: 0; max-width: none; }
+      .datatable-footer { align-items: flex-start; flex-direction: column; }
+    }
   `]
 })
 export class TicketsComponent implements OnInit {
@@ -522,6 +575,39 @@ export class TicketsComponent implements OnInit {
   loading = false;
   error: string | null = null;
   readonly sendingTicketIds = new Set<string>();
+  searchTerm = '';
+  page = 1;
+  pageSize = 25;
+  sortKey: TicketSortKey = 'id';
+  sortDirection: 'asc' | 'desc' = 'desc';
+
+  get filteredTickets(): TicketRow[] {
+    const query = this.normalize(this.searchTerm);
+    const rows = query
+      ? this.tickets.filter((ticket) => this.normalize([
+          ticket.id, ticket.eventName, ticket.venueName, ticket.bookingReference,
+          ticket.section, ticket.seatLabel, ticket.status, ticket.ticketType,
+          ticket.qrCode, ticket.bookingTotal
+        ].join(' ')).includes(query))
+      : [...this.tickets];
+
+    return rows.sort((left, right) => {
+      const a = left[this.sortKey] ?? '';
+      const b = right[this.sortKey] ?? '';
+      const comparison = typeof a === 'number' && typeof b === 'number'
+        ? a - b
+        : String(a).localeCompare(String(b), 'es', { numeric: true, sensitivity: 'base' });
+      return this.sortDirection === 'asc' ? comparison : -comparison;
+    });
+  }
+
+  get totalPages(): number { return Math.max(1, Math.ceil(this.filteredTickets.length / this.pageSize)); }
+  get pagedTickets(): TicketRow[] {
+    const safePage = Math.min(this.page, this.totalPages);
+    return this.filteredTickets.slice((safePage - 1) * this.pageSize, safePage * this.pageSize);
+  }
+  get resultStart(): number { return this.filteredTickets.length ? (Math.min(this.page, this.totalPages) - 1) * this.pageSize + 1 : 0; }
+  get resultEnd(): number { return Math.min(Math.min(this.page, this.totalPages) * this.pageSize, this.filteredTickets.length); }
 
   get issuedCount(): number {
     return this.tickets.filter(t => t.status === 'issued' || t.status === 'emitido').length;
@@ -544,6 +630,7 @@ export class TicketsComponent implements OnInit {
     this.api.get<any[]>('/tickets', { per_page: 200 }).subscribe({
       next: (data) => {
         this.tickets = (Array.isArray(data) ? data : []).map((t) => this.mapTicket(t));
+        this.page = 1;
         this.loading = false;
       },
       error: () => {
@@ -551,6 +638,34 @@ export class TicketsComponent implements OnInit {
         this.loading = false;
       }
     });
+  }
+
+  setSearch(event: Event): void {
+    this.searchTerm = (event.target as HTMLInputElement).value;
+    this.page = 1;
+  }
+
+  clearSearch(): void { this.searchTerm = ''; this.page = 1; }
+
+  setPageSize(event: Event): void {
+    this.pageSize = Number((event.target as HTMLSelectElement).value) || 25;
+    this.page = 1;
+  }
+
+  goToPage(page: number): void { this.page = Math.max(1, Math.min(page, this.totalPages)); }
+
+  sortBy(key: TicketSortKey): void {
+    if (this.sortKey === key) this.sortDirection = this.sortDirection === 'asc' ? 'desc' : 'asc';
+    else { this.sortKey = key; this.sortDirection = 'asc'; }
+    this.page = 1;
+  }
+
+  sortIcon(key: TicketSortKey): string {
+    return this.sortKey !== key ? 'unfold_more' : this.sortDirection === 'asc' ? 'arrow_upward' : 'arrow_downward';
+  }
+
+  private normalize(value: unknown): string {
+    return String(value ?? '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().trim();
   }
 
   private mapTicket(t: any): TicketRow {
