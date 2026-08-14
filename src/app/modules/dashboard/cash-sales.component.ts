@@ -166,7 +166,7 @@ export class CashSalesComponent implements OnInit {
     seatIds: [[] as string[]],
     type: ['cash' as 'cash' | 'courtesy', Validators.required],
     paymentMethod: ['efectivo' as ManualPaymentMethod, Validators.required],
-    customerName: [''],
+    customerName: ['', Validators.required],
     customerPhone: ['', Validators.pattern(/^\+?[0-9][0-9\s()-]{6,29}$/)],
     customerEmail: ['', [Validators.required, Validators.email]],
     authorizationNumber: ['']
