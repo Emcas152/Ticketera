@@ -46,6 +46,23 @@ Roles sembrados por la API:
 
 - Reservas y confirmaciones usan transacciones.
 - Los repositorios de booking, asiento y ticket usan `lockForUpdate()`.
+
+## Venta administrativa y comprobantes
+
+`POST /bookings` debe aceptar `customer_email`, `beneficiary_email`, `payment_method`,
+`authorization_number` y `send_ticket_email`. Para ventas no presenciales,
+`POST /bookings/pay` recibe `multipart/form-data` con:
+
+- `booking_id`, `ticket_type`, `payment_method` y `nit`;
+- `customer_name`, `customer_phone` y `customer_email`;
+- `authorization_number` obligatorio para `visalink`, `compraclic` y `transferencia`;
+- `payment_proof` obligatorio para esos métodos (JPG, PNG, WEBP o PDF, máximo 5 MB);
+- `send_ticket_email=1`.
+
+La API debe guardar el comprobante en almacenamiento privado, persistir solamente su ruta y metadatos,
+restringir la descarga a usuarios autorizados y enviar los tickets al correo mediante una cola después
+de confirmar la transacción. El envío debe registrarse y ser reintentable; un fallo de correo no debe
+revertir una venta confirmada.
 - Existe expiración programada de bookings.
 - El callback compara el identificador de transacción persistido.
 - La validación QR usa transacción y bloqueo.

@@ -1,5 +1,5 @@
 import { inject, Injectable } from '@angular/core';
-import { BehaviorSubject, Observable, delay, map, of, switchMap, tap, throwError } from 'rxjs';
+import { BehaviorSubject, Observable, catchError, delay, map, of, switchMap, tap, throwError } from 'rxjs';
 import { environment } from '../../../environments/environment';
 import { MOCK_BOOKINGS, MOCK_EVENTS, MOCK_SEAT_MAPS } from '../mocks/mock-data';
 import { BookingRecord, BookingTotals, PaymentDetails, PaymentResult } from '../models/booking.model';
@@ -406,9 +406,7 @@ export class BookingService {
       switchMap((reservation) => {
         const issue$ = type === 'courtesy'
           ? this.generateCourtesyTickets(reservation.booking_id)
-          : this.api.post<LaravelPaymentResponse>('/bookings/manual-confirmation', this.manualPaymentPayload(
-              reservation.booking_id, customerName, customerPhone, payment
-            ));
+          : this.confirmManualPayment(reservation.booking_id, customerName, customerPhone, payment);
 
         return issue$.pipe(map(() => reservation));
       }),
@@ -426,6 +424,28 @@ export class BookingService {
         };
       }),
       tap((confirmed) => this.persistManualEntry(event.id, confirmed, seatIds, type))
+    );
+  }
+
+  private confirmManualPayment(
+    bookingId: number | string,
+    customerName: string,
+    customerPhone: string,
+    payment: ManualPaymentDetails
+  ): Observable<LaravelPaymentResponse> {
+    const payload = this.manualPaymentPayload(bookingId, customerName, customerPhone, payment);
+
+    return this.api.post<LaravelPaymentResponse>('/bookings/manual-confirmation', payload).pipe(
+      catchError((error: { status?: number }) => {
+        if (error?.status !== 404) {
+          return throwError(() => error);
+        }
+
+        // Compatibilidad con servidores que todavía no tienen desplegada la ruta
+        // administrativa. Estos métodos se confirman localmente en el backend y no
+        // deben enviarse a la pasarela de tarjetas.
+        return this.api.post<LaravelPaymentResponse>('/bookings/pay', payload);
+      })
     );
   }
 

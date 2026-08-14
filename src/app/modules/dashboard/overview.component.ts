@@ -20,6 +20,7 @@ interface MetricCard {
 
 interface ChartPoint {
   label: string;
+  key?: string;
   value: number;
   display: string;
   percent: number;
@@ -52,6 +53,7 @@ interface DashboardFilters {
   eventId: string;
   category: string;
   period: 'all' | 'today' | 'week' | 'month';
+  paymentMethod: 'all' | 'efectivo' | 'visalink' | 'compraclic' | 'transferencia' | 'tarjeta' | 'cortesia';
 }
 
 @Component({
@@ -118,6 +120,19 @@ interface DashboardFilters {
             </select>
           </label>
 
+          <label>
+            <span>Método de pago</span>
+            <select [value]="filters.paymentMethod" (change)="setFilter('paymentMethod', $event)">
+              <option value="all">Todos</option>
+              <option value="efectivo">Efectivo</option>
+              <option value="visalink">VisaLink</option>
+              <option value="compraclic">CompraClick</option>
+              <option value="transferencia">Transferencia</option>
+              <option value="tarjeta">Tarjeta</option>
+              <option value="cortesia">Cortesía</option>
+            </select>
+          </label>
+
           <button type="button" class="clear-filter" [disabled]="!vm.hasFilters" (click)="clearFilters()">
             <mat-icon>restart_alt</mat-icon>
             Restablecer
@@ -178,7 +193,8 @@ interface DashboardFilters {
 
             <div class="payment-list">
               @for (point of vm.paymentMethods; track point.label) {
-                <div class="payment-row">
+                <button type="button" class="payment-row" [class.is-selected]="filters.paymentMethod === point.key"
+                  (click)="filterByPayment(point.key)">
                   <div class="payment-label">
                     <strong>{{ point.label }}</strong>
                     <span>{{ point.display }}</span>
@@ -187,7 +203,7 @@ interface DashboardFilters {
                     <span [style.width.%]="point.percent"></span>
                   </div>
                   <small>{{ point.percent | number: '1.0-0' }}%</small>
-                </div>
+                </button>
               }
             </div>
           </article>
@@ -200,14 +216,12 @@ interface DashboardFilters {
               </div>
             </div>
             <div class="split-values">
-              <div>
-                <span>Tarjeta</span>
-                <strong>{{ vm.cardRevenue | currencyGtq }}</strong>
-              </div>
-              <div>
-                <span>Efectivo</span>
-                <strong>{{ vm.cashRevenue | currencyGtq }}</strong>
-              </div>
+              @for (point of vm.paymentMethods; track point.label) {
+                <div>
+                  <span>{{ point.label }}</span>
+                  <strong>{{ point.value | currencyGtq }}</strong>
+                </div>
+              }
             </div>
           </article>
 
@@ -271,7 +285,7 @@ interface DashboardFilters {
 
     .filter-panel {
       display: grid;
-      grid-template-columns: minmax(190px, 1.15fr) repeat(3, minmax(150px, 1fr)) auto;
+      grid-template-columns: minmax(190px, 1.15fr) repeat(4, minmax(140px, 1fr)) auto;
       gap: 12px;
       align-items: end;
       padding: 16px 18px;
@@ -535,6 +549,8 @@ interface DashboardFilters {
       gap: 12px;
       align-items: center;
     }
+    button.payment-row { width:100%;border:0;background:transparent;text-align:left;font:inherit;color:inherit;cursor:pointer; }
+    button.payment-row:hover,button.payment-row.is-selected { background:rgba(106,0,255,.05);border-radius:10px; }
 
     .payment-label span {
       display: block;
@@ -651,7 +667,8 @@ export class OverviewComponent {
   private readonly filtersSubject = new BehaviorSubject<DashboardFilters>({
     eventId: 'all',
     category: 'all',
-    period: 'all'
+    period: 'all',
+    paymentMethod: 'all'
   });
 
   readonly user$ = this.auth.user$;
@@ -665,7 +682,8 @@ export class OverviewComponent {
       const visibleEvents = this.filterEvents(events, filters);
       const dateFrom = this.periodStart(filters.period);
       return visibleEvents.length
-        ? this.dashboardMetrics.get(visibleEvents.map((event) => event.id), dateFrom).pipe(
+        ? this.dashboardMetrics.get(visibleEvents.map((event) => event.id), dateFrom,
+            filters.paymentMethod === 'all' ? undefined : filters.paymentMethod).pipe(
             map((response) => this.buildDashboard(bookings, events, filters, response.data))
           )
         : of(this.buildDashboard(bookings, events, filters, null));
@@ -679,12 +697,18 @@ export class OverviewComponent {
   }
 
   clearFilters(): void {
-    this.filters = { eventId: 'all', category: 'all', period: 'all' };
+    this.filters = { eventId: 'all', category: 'all', period: 'all', paymentMethod: 'all' };
     this.filtersSubject.next(this.filters);
   }
 
   categories(events: EventItem[]): string[] {
     return [...new Set(events.map((event) => event.category).filter(Boolean))].sort((a, b) => a.localeCompare(b));
+  }
+
+  filterByPayment(method?: string): void {
+    if (!method || method === 'sin_especificar') return;
+    this.filters = { ...this.filters, paymentMethod: this.filters.paymentMethod === method ? 'all' : method as DashboardFilters['paymentMethod'] };
+    this.filtersSubject.next(this.filters);
   }
 
   private buildDashboard(
@@ -695,14 +719,15 @@ export class OverviewComponent {
   ): SalesDashboardVm {
     const allEvents = [...events].sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
     const currentEvents = allEvents.filter((event) => this.isCurrentEvent(event));
-    const hasFilters = filters.eventId !== 'all' || filters.category !== 'all' || filters.period !== 'all';
+    const hasFilters = filters.eventId !== 'all' || filters.category !== 'all' || filters.period !== 'all' || filters.paymentMethod !== 'all';
     const visibleEvents = (hasFilters ? allEvents : currentEvents).filter((event) =>
       (filters.eventId === 'all' || event.id === filters.eventId) &&
       (filters.category === 'all' || event.category === filters.category)
     );
     const visibleEventIds = new Set(visibleEvents.map((event) => String(event.id)));
     const visibleBookings = bookings.filter((booking) =>
-      visibleEventIds.has(String(booking.eventId)) && this.bookingMatchesPeriod(booking, filters.period)
+      visibleEventIds.has(String(booking.eventId)) && this.bookingMatchesPeriod(booking, filters.period) &&
+      (filters.paymentMethod === 'all' || this.paymentMethodKey(booking.paymentMethod) === filters.paymentMethod)
     );
 
     bookings = visibleBookings;
@@ -729,7 +754,8 @@ export class OverviewComponent {
     const availableTickets = serverMetrics?.available_tickets ?? calculatedAvailableTickets;
     const cashRevenue = serverMetrics?.cash_revenue ?? calculatedCashRevenue;
     const approvedSales = serverMetrics?.approved_sales ?? paidBookings.length;
-    const cardRevenue = totalRevenue - cashRevenue;
+    const cardRevenue = Number(serverMetrics?.payment_methods?.find((row) => row.method === 'tarjeta')?.revenue
+      ?? serverMetrics?.card_revenue ?? 0);
 
     const eventRows = events
       .map((event) => {
@@ -780,7 +806,7 @@ export class OverviewComponent {
         }
       ],
       dailySales: this.buildDailySales(paidBookings),
-      paymentMethods: this.buildPaymentMethods(paidBookings),
+      paymentMethods: this.buildPaymentMethods(paidBookings, serverMetrics),
       eventRows,
       recentBookings: [...paidBookings]
         .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
@@ -852,21 +878,44 @@ export class OverviewComponent {
     return this.withPercent(points);
   }
 
-  private buildPaymentMethods(bookings: BookingRecord[]): ChartPoint[] {
-    const grouped = bookings.reduce<Record<string, number>>((acc, booking) => {
-      const label = this.isCashPayment(booking.paymentMethod) ? 'Efectivo' : 'Tarjeta';
-      acc[label] = (acc[label] ?? 0) + booking.totals.total;
-      return acc;
-    }, {});
-
-    const points = Object.entries(grouped).map(([label, value]) => ({
-      label,
-      value,
-      display: this.formatCurrency(value),
+  private buildPaymentMethods(_bookings: BookingRecord[], serverMetrics: DashboardMetrics | null): ChartPoint[] {
+    const labels: Record<string, string> = {
+      efectivo: 'Efectivo',
+      visalink: 'VisaLink',
+      compraclic: 'CompraClick',
+      transferencia: 'Transferencia',
+      tarjeta: 'Tarjeta',
+      cortesia: 'Cortesía',
+      sin_especificar: 'Sin especificar'
+    };
+    const paymentRows = serverMetrics?.payment_methods;
+    const databaseValues = new Map((paymentRows ?? []).map((row) => [row.method, Number(row.revenue) || 0]));
+    if (!paymentRows) {
+      databaseValues.set('efectivo', Number(serverMetrics?.cash_revenue) || 0);
+      const legacyFields: Array<[string, number | undefined]> = [
+        ['visalink', serverMetrics?.visalink_revenue],
+        ['compraclic', serverMetrics?.compraclic_revenue],
+        ['transferencia', serverMetrics?.transfer_revenue],
+        ['tarjeta', serverMetrics?.card_revenue]
+      ];
+      legacyFields.forEach(([method, value]) => {
+        if (value !== undefined) databaseValues.set(method, Number(value) || 0);
+      });
+      const classifiedRevenue = [...databaseValues.values()].reduce((sum, value) => sum + value, 0);
+      const unclassifiedRevenue = Math.max((Number(serverMetrics?.total_revenue) || 0) - classifiedRevenue, 0);
+      if (unclassifiedRevenue > 0) databaseValues.set('sin_especificar', unclassifiedRevenue);
+    }
+    const knownMethods = ['efectivo', 'visalink', 'compraclic', 'transferencia', 'tarjeta'];
+    const methods = [...knownMethods, ...[...databaseValues.keys()].filter((method) => !knownMethods.includes(method))];
+    const points = methods.map((method) => ({
+      key: method,
+      label: labels[method] ?? method,
+      value: databaseValues.get(method) ?? 0,
+      display: this.formatCurrency(databaseValues.get(method) ?? 0),
       percent: 0
     }));
 
-    return this.withPercent(points.length ? points : [{ label: 'Sin ventas', value: 0, display: 'Q0.00', percent: 0 }]);
+    return this.withPercent(points);
   }
 
   private withPercent(points: ChartPoint[]): ChartPoint[] {
@@ -888,5 +937,25 @@ export class OverviewComponent {
 
   private isCashPayment(paymentMethod: string): boolean {
     return paymentMethod.trim().toLocaleLowerCase('es-GT').includes('efectivo');
+  }
+
+  private paymentMethodLabel(paymentMethod: string): string {
+    const method = paymentMethod.trim().toLocaleLowerCase('es-GT');
+    if (method.includes('efectivo')) return 'Efectivo';
+    if (method.includes('visalink')) return 'VisaLink';
+    if (method.includes('compraclic')) return 'CompraClick';
+    if (method.includes('transferencia')) return 'Transferencia';
+    return 'Tarjeta';
+  }
+
+  private paymentMethodKey(paymentMethod: string): DashboardFilters['paymentMethod'] | 'sin_especificar' {
+    const method = paymentMethod.trim().toLocaleLowerCase('es-GT');
+    if (method.includes('efectivo')) return 'efectivo';
+    if (method.includes('visalink')) return 'visalink';
+    if (method.includes('compraclic')) return 'compraclic';
+    if (method.includes('transferencia')) return 'transferencia';
+    if (method.includes('cortesia') || method.includes('cortesía')) return 'cortesia';
+    if (method) return 'tarjeta';
+    return 'sin_especificar';
   }
 }

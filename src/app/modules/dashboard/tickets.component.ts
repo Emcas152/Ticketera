@@ -19,6 +19,8 @@ interface TicketRow {
   section: string;
   bookingReference: string;
   bookingTotal: number;
+  pdfUrl: string | null;
+  canDownload: boolean;
 }
 
 @Component({
@@ -85,6 +87,7 @@ interface TicketRow {
                   <th class="col-status">Estado</th>
                   <th class="col-type">Tipo</th>
                   <th class="col-total">Total</th>
+                  <th class="col-actions">Acciones</th>
                 </tr>
               </thead>
               <tbody>
@@ -134,10 +137,22 @@ interface TicketRow {
                   <td class="col-total td-total">
                     <strong class="total-amount">{{ ticket.bookingTotal | currencyGtq }}</strong>
                   </td>
+                  <td class="col-actions">
+                    <div class="ticket-actions">
+                      <button mat-icon-button type="button" matTooltip="Enviar por correo"
+                        [disabled]="isSending(ticket.id)" (click)="emailTicket(ticket)">
+                        <mat-icon>{{ isSending(ticket.id) ? 'hourglass_top' : 'mail' }}</mat-icon>
+                      </button>
+                      <button mat-icon-button type="button" matTooltip="Descargar ticket"
+                        [disabled]="!ticket.canDownload || !ticket.pdfUrl" (click)="downloadTicket(ticket)">
+                        <mat-icon>download</mat-icon>
+                      </button>
+                    </div>
+                  </td>
                 </tr>
                 } @empty {
                 <tr>
-                  <td colspan="9" class="empty-row">
+                  <td colspan="10" class="empty-row">
                     <mat-icon>confirmation_number</mat-icon>
                     <p>No se encontraron tickets.</p>
                   </td>
@@ -459,6 +474,9 @@ interface TicketRow {
       -webkit-text-fill-color: transparent;
       background-clip: text;
     }
+    .ticket-actions { display:flex;align-items:center;gap:2px; }
+    .ticket-actions button { width:32px;height:32px;color:var(--brand-primary); }
+    .ticket-actions mat-icon { font-size:18px;width:18px;height:18px; }
 
     /* ── Empty row ────────────────────────────── */
     .empty-row {
@@ -503,6 +521,7 @@ export class TicketsComponent implements OnInit {
   tickets: TicketRow[] = [];
   loading = false;
   error: string | null = null;
+  readonly sendingTicketIds = new Set<string>();
 
   get issuedCount(): number {
     return this.tickets.filter(t => t.status === 'issued' || t.status === 'emitido').length;
@@ -559,7 +578,34 @@ export class TicketsComponent implements OnInit {
       section: seat?.section ?? '—',
       bookingReference: t.booking?.reference ?? t.booking_reference ?? '—',
       bookingTotal: Number(t.ticket_total ?? t.booking?.total ?? 0),
+      pdfUrl: t.pdf_url ?? null,
+      canDownload: Boolean(t.can_download),
     };
+  }
+
+  isSending(ticketId: number | string): boolean {
+    return this.sendingTicketIds.has(String(ticketId));
+  }
+
+  emailTicket(ticket: TicketRow): void {
+    const id = String(ticket.id);
+    if (this.sendingTicketIds.has(id)) return;
+    this.sendingTicketIds.add(id);
+    this.api.post<{ message?: string }>(`/tickets/${ticket.id}/email`, {}).subscribe({
+      next: (response) => {
+        this.sendingTicketIds.delete(id);
+        this.snackBar.open(response?.message || 'Ticket enviado por correo.', 'OK', { duration: 3500 });
+      },
+      error: () => {
+        this.sendingTicketIds.delete(id);
+        this.snackBar.open('No fue posible enviar el ticket por correo.', 'OK', { duration: 4500 });
+      }
+    });
+  }
+
+  downloadTicket(ticket: TicketRow): void {
+    if (!ticket.pdfUrl || !ticket.canDownload) return;
+    window.open(ticket.pdfUrl, '_blank', 'noopener,noreferrer');
   }
 
   statusLabel(status: string): string {
