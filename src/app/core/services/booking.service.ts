@@ -352,7 +352,8 @@ export class BookingService {
     seats: Seat[],
     type: 'cash' | 'courtesy',
     customerName: string,
-    customerPhone = ''
+    customerPhone = '',
+    payment: ManualPaymentDetails = { customerEmail: '', paymentMethod: 'efectivo', authorizationNumber: '', proofFile: null }
   ): Observable<BookingRecord> {
     if (seats.length === 0) {
       return throwError(() => new Error('Selecciona al menos un asiento disponible en el mapa.'));
@@ -379,7 +380,7 @@ export class BookingService {
         seats: seats.map((seat) => ({ ...seat, status: 'sold' })),
         totals,
         createdAt: new Date().toISOString(),
-        paymentMethod: `${type === 'cash' ? 'Efectivo' : 'Cortesía'}${customerName ? ` - ${customerName}` : ''}`,
+        paymentMethod: `${type === 'cash' ? this.manualPaymentLabel(payment.paymentMethod) : 'Cortesía'}${customerName ? ` - ${customerName}` : ''}`,
         status: 'confirmed',
         qrCode: createSecureTicketQr(),
         usedAt: null
@@ -395,19 +396,19 @@ export class BookingService {
       event_id: Number(event.id),
       seat_ids: seatIds.map(Number),
       customer_name: customerName || undefined,
-      customer_phone: customerPhone || undefined
+      customer_phone: customerPhone || undefined,
+      customer_email: payment.customerEmail || undefined,
+      beneficiary_email: type === 'courtesy' ? payment.customerEmail || undefined : undefined,
+      payment_method: type === 'cash' ? payment.paymentMethod : 'cortesia',
+      authorization_number: type === 'cash' ? payment.authorizationNumber || undefined : undefined,
+      send_ticket_email: true
     }).pipe(
       switchMap((reservation) => {
         const issue$ = type === 'courtesy'
           ? this.generateCourtesyTickets(reservation.booking_id)
-          : this.api.post<LaravelPaymentResponse>('/bookings/pay', {
-              booking_id: Number(reservation.booking_id),
-              ticket_type: 'efectivo',
-              payment_method: 'efectivo',
-              nit: 'C/F',
-              customer_name: customerName || undefined,
-              customer_phone: customerPhone || undefined
-            });
+          : this.api.post<LaravelPaymentResponse>('/bookings/manual-confirmation', this.manualPaymentPayload(
+              reservation.booking_id, customerName, customerPhone, payment
+            ));
 
         return issue$.pipe(map(() => reservation));
       }),
@@ -421,11 +422,35 @@ export class BookingService {
           totals: type === 'courtesy'
             ? { subtotal: 0, serviceFee: 0, taxes: 0, total: 0 }
             : booking.totals,
-          paymentMethod: `${type === 'cash' ? 'Efectivo' : 'Cortesía'}${customerName ? ` - ${customerName}` : ''}`
+          paymentMethod: `${type === 'cash' ? this.manualPaymentLabel(payment.paymentMethod) : 'Cortesía'}${customerName ? ` - ${customerName}` : ''}`
         };
       }),
       tap((confirmed) => this.persistManualEntry(event.id, confirmed, seatIds, type))
     );
+  }
+
+  private manualPaymentPayload(
+    bookingId: number | string,
+    customerName: string,
+    customerPhone: string,
+    payment: ManualPaymentDetails
+  ): FormData {
+    const body = new FormData();
+    body.append('booking_id', String(bookingId));
+    body.append('ticket_type', payment.paymentMethod === 'efectivo' ? 'efectivo' : payment.paymentMethod);
+    body.append('payment_method', payment.paymentMethod);
+    body.append('nit', 'C/F');
+    body.append('customer_name', customerName);
+    body.append('customer_phone', customerPhone);
+    body.append('customer_email', payment.customerEmail);
+    if (payment.authorizationNumber) body.append('authorization_code', payment.authorizationNumber);
+    if (payment.proofFile) body.append('payment_proof', payment.proofFile, payment.proofFile.name);
+    body.append('send_ticket_email', '1');
+    return body;
+  }
+
+  private manualPaymentLabel(method: ManualPaymentDetails['paymentMethod']): string {
+    return ({ efectivo: 'Efectivo', visalink: 'VisaLink', compraclic: 'CompraClick', transferencia: 'Transferencia' })[method];
   }
 
   recordManualCashSale(event: EventItem, tier: EventPriceTier, quantity: number, customerName: string): Observable<BookingRecord> {
@@ -669,6 +694,12 @@ export class BookingService {
     const targetSections = validApiSections.length > 0 ? validApiSections : apiSections;
 
     const allApiSeats: LaravelSeat[] = targetSections.flatMap((s) => s.seats);
+    const sectionNamesById = new Map<string, string>();
+    targetSections.forEach((section) => {
+      if (section.section_id != null && section.section) {
+        sectionNamesById.set(String(section.section_id), section.section);
+      }
+    });
     const tableGroupMap = new Map<number, LaravelSeat[]>();
 
     allApiSeats.forEach((seat, idx) => {
@@ -703,16 +734,20 @@ export class BookingService {
 
     const tables: SeatTable[] = Array.from(tableGroupMap.entries()).map(([tableNumber, apiTableSeats]) => {
       const first = apiTableSeats[0];
-      const sectionName = first?.section || 'General';
+      const sectionName = first?.section
+        || (first?.section_id != null ? sectionNamesById.get(String(first.section_id)) : undefined)
+        || 'General';
       const sectionId = this.slugify(sectionName);
       const position = calculateTablePosition(tableNumber, sectionName);
 
       const tableSeats = apiTableSeats.map((s, idx) => {
-        const sNum = Number(s.number ?? s.seat_number ?? idx + 1);
+        const sNum = this.tableSeatNumber(s, idx + 1);
         const localPos = calculateLocalSeatPosition(sNum);
         const mapped = this.mapLaravelSeat(s, sectionId, sectionName, 0, idx);
         return {
           ...mapped,
+          tableId: `table-${tableNumber}`,
+          tableLabel: String(tableNumber),
           x: position.x + localPos.cx,
           y: position.y + localPos.cy
         };
@@ -762,7 +797,7 @@ export class BookingService {
     const apiPrice = Number(seat.price);
     const price = Number.isFinite(apiPrice) && apiPrice >= 0 ? apiPrice : this.getSectionPrice(sectionName);
     const row = seat.row ?? seat.row_label ?? 'A';
-    const number = Number(seat.number ?? seat.seat_number ?? seatIndex + 1);
+    const number = this.tableSeatNumber(seat, seatIndex + 1);
 
     return {
       id: String(seat.id),
@@ -784,6 +819,14 @@ export class BookingService {
     const tier = event?.priceTiers.find((item) => item.name.toLowerCase() === sectionName.toLowerCase());
 
     return tier?.price ?? event?.basePrice ?? 0;
+  }
+
+  private tableSeatNumber(seat: LaravelSeat, fallback: number): number {
+    const rawNumber = Number(seat.number ?? seat.seat_number ?? fallback);
+    if (!Number.isFinite(rawNumber) || rawNumber < 1) return fallback;
+    return seat.number_table != null && String(seat.number_table).trim() !== ''
+      ? ((Math.trunc(rawNumber) - 1) % 10) + 1
+      : Math.trunc(rawNumber);
   }
 
   private mapSeatStatus(status?: string): Seat['status'] {
@@ -972,6 +1015,7 @@ interface LaravelSeat {
 }
 
 interface LaravelSeatMapSection {
+  section_id?: number | string;
   section: string | null;
   seats: LaravelSeat[];
 }
@@ -1022,6 +1066,13 @@ interface LaravelPaymentResponse {
   booking_id?: number | string;
   payment_id?: number | string;
   tickets_count?: number;
+}
+
+interface ManualPaymentDetails {
+  customerEmail: string;
+  paymentMethod: 'efectivo' | 'visalink' | 'compraclic' | 'transferencia';
+  authorizationNumber: string;
+  proofFile: File | null;
 }
 
 interface LaravelBookingSummary {
