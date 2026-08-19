@@ -290,7 +290,8 @@ export class EventService {
         rating: 4.7
       },
       priceTiers: event.price_tiers?.length
-        ? event.price_tiers.map((tier) => ({
+          ? event.price_tiers.map((tier) => ({
+            sectionId: tier.section_id,
             name: tier.name,
             price: Number(tier.price),
             description: `Sector ${tier.name}.`,

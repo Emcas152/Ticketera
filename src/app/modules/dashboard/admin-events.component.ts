@@ -82,12 +82,12 @@ import { CurrencyGtqPipe } from '../../shared/pipes/currency-gtq.pipe';
                   @for (section of sectionControls; track $index; let index = $index) {
                     <div class="section-row" [formGroupName]="index">
                       <span class="section-index">{{ index + 1 }}</span>
-                      <mat-form-field appearance="outline"><mat-label>Sección</mat-label><input matInput formControlName="name" /></mat-form-field>
-                      <mat-form-field appearance="outline"><mat-label>Código</mat-label><input matInput formControlName="code" /></mat-form-field>
-                      <mat-form-field appearance="outline"><mat-label>Filas</mat-label><input matInput formControlName="rows" /></mat-form-field>
-                      <mat-form-field appearance="outline"><mat-label>Asientos por fila</mat-label><input matInput type="number" min="1" formControlName="seatsPerRow" /></mat-form-field>
-                      <mat-form-field appearance="outline"><mat-label>Precio</mat-label><span matTextPrefix>Q&nbsp;</span><input matInput type="number" min="0" formControlName="price" /></mat-form-field>
-                      <button mat-icon-button type="button" aria-label="Eliminar sección" (click)="removeSection(index)"><mat-icon>delete_outline</mat-icon></button>
+                      <mat-form-field class="name-field" appearance="outline"><mat-label>Sección</mat-label><input matInput formControlName="name" /></mat-form-field>
+                      <mat-form-field class="code-field" appearance="outline"><mat-label>Código</mat-label><input matInput formControlName="code" /></mat-form-field>
+                      <mat-form-field class="rows-field" appearance="outline"><mat-label>Filas</mat-label><input matInput formControlName="rows" /></mat-form-field>
+                      <mat-form-field class="seats-field" appearance="outline"><mat-label>Asientos por fila</mat-label><input matInput type="number" min="1" formControlName="seatsPerRow" /></mat-form-field>
+                      <mat-form-field class="price-field" appearance="outline"><mat-label>Precio</mat-label><span matTextPrefix>Q&nbsp;</span><input matInput type="number" min="0" formControlName="price" /></mat-form-field>
+                      <button class="delete-section" mat-icon-button type="button" aria-label="Eliminar sección" matTooltip="Eliminar sección" (click)="removeSection(index)"><mat-icon>delete_outline</mat-icon></button>
                     </div>
                   } @empty {
                     <p class="step-note warning"><mat-icon>warning</mat-icon> El venue no tiene secciones disponibles.</p>
@@ -317,8 +317,8 @@ import { CurrencyGtqPipe } from '../../shared/pipes/currency-gtq.pipe';
     .step-note mat-icon { width: 18px; height: 18px; font-size: 18px; }
     .step-note.warning { color: #9a6700; }
     .section-editor { display: grid; gap: 12px; }
-    .section-row { display: grid;grid-template-columns:32px minmax(145px,1.4fr) minmax(80px,.7fr) minmax(80px,.7fr) minmax(120px,1fr) minmax(115px,1fr) 40px;gap:9px;align-items:start;padding:14px 10px 0;border:1px solid #e2e8f0;border-radius:12px;background:#fff;box-shadow:0 2px 8px rgba(15,23,42,.04) }
-    .section-index{display:grid;place-items:center;width:26px;height:26px;margin-top:13px;border-radius:50%;background:#e8f1ff;color:#0759b8;font-size:.76rem;font-weight:800}.section-row mat-form-field{min-width:0}.section-row button{margin-top:8px}
+    .section-row { display:grid;grid-template-columns:32px minmax(130px,1fr) minmax(150px,1.2fr) minmax(130px,1fr) 40px;gap:0 10px;align-items:start;padding:14px 12px 2px;border:1px solid #dbe3ee;border-radius:14px;background:#fff;box-shadow:0 3px 12px rgba(15,23,42,.05) }
+    .section-index{grid-row:1/3;display:grid;place-items:center;width:26px;height:26px;margin-top:13px;border-radius:50%;background:#e8f1ff;color:#0759b8;font-size:.76rem;font-weight:800}.section-row mat-form-field{min-width:0}.name-field{grid-column:2/4}.code-field{grid-column:4}.delete-section{grid-column:5;grid-row:1;margin-top:8px}.rows-field{grid-column:2}.seats-field{grid-column:3}.price-field{grid-column:4}.section-row:focus-within{border-color:#93c5fd;box-shadow:0 0 0 3px rgba(59,130,246,.09)}
 
     .image-upload { display: grid; gap: 8px; color: var(--text-muted); font-size: .82rem; }
     .image-upload input { display: none; }
@@ -371,7 +371,7 @@ import { CurrencyGtqPipe } from '../../shared/pipes/currency-gtq.pipe';
         grid-template-columns: 1fr;
       }
 
-      .section-row{grid-template-columns:32px repeat(2,minmax(0,1fr))}.section-row .section-index{grid-row:1/4}.section-row button{margin-top:0}
+      .section-row{grid-template-columns:32px 1fr 1fr 40px}.section-index{grid-row:1/4}.name-field{grid-column:2/4}.code-field{grid-column:2}.rows-field{grid-column:3}.seats-field{grid-column:2}.price-field{grid-column:3}.delete-section{grid-column:4;grid-row:1}
 
       .row-actions {
         justify-content: flex-start;
@@ -705,7 +705,10 @@ export class AdminEventsComponent implements OnInit {
 
   private createSectionGroup(section?: VenueSection) {
     const tierPrice = this.editingEvent
-      ? this.editingEvent.priceTiers.find((t) => t.name.toLowerCase() === (section?.name ?? '').toLowerCase())?.price
+      ? this.editingEvent.priceTiers.find((tier) =>
+          String(tier.sectionId ?? '') === String(section?.id ?? '')
+          || tier.name.trim().toLowerCase() === (section?.name ?? '').trim().toLowerCase()
+        )?.price
       : undefined;
 
     return this.fb.group({

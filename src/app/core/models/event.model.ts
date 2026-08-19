@@ -1,4 +1,5 @@
 export interface EventPriceTier {
+  sectionId?: number | string;
   name: string;
   price: number;
   description: string;
