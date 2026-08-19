@@ -198,7 +198,7 @@ export class EventService {
       capacity: input.capacity,
       image_url: input.image || null,
       starts_at: startsAt,
-      ends_at: new Date(new Date(startsAt).getTime() + 3 * 60 * 60 * 1000).toISOString(),
+      ends_at: this.addHoursInGuatemala(startsAt, 3),
       presale_starts_at: input.presaleStartsAt
         ? this.toEventIso(...input.presaleStartsAt.split('T', 2) as [string, string])
         : null
@@ -231,7 +231,14 @@ export class EventService {
           }))
         };
 
-        return this.api.post('/event-sections-price', payload).pipe(map(() => event));
+        return this.api.post('/event-sections-price', payload).pipe(map(() => ({
+          ...event,
+          price_tiers: sections.map((section) => ({
+            section_id: section.id,
+            name: section.name,
+            price: prices.get(this.normalizeName(section.name)) ?? input.basePrice
+          }))
+        })));
       })
     );
   }
@@ -304,13 +311,30 @@ export class EventService {
   }
 
   private toEventIso(date: string, time = '19:00'): string {
-    return new Date(`${date}T${time || '19:00'}:00-06:00`).toISOString();
+    return `${date}T${time || '19:00'}:00-06:00`;
+  }
+
+  private addHoursInGuatemala(value: string, hours: number): string {
+    const result = new Date(new Date(value).getTime() + hours * 60 * 60 * 1000);
+    const parts = new Intl.DateTimeFormat('en-CA', {
+      timeZone: 'America/Guatemala',
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit',
+      hour: '2-digit',
+      minute: '2-digit',
+      second: '2-digit',
+      hourCycle: 'h23'
+    }).formatToParts(result);
+    const part = (type: Intl.DateTimeFormatPartTypes) => parts.find((item) => item.type === type)?.value ?? '';
+
+    return `${part('year')}-${part('month')}-${part('day')}T${part('hour')}:${part('minute')}:${part('second')}-06:00`;
   }
 
   private normalizeApiDate(value?: string | null): string | null {
     if (!value) return null;
     if (/Z$|[+-]\d{2}:?\d{2}$/.test(value)) return value;
-    return `${value.replace(' ', 'T')}Z`;
+    return `${value.replace(' ', 'T')}-06:00`;
   }
 
   private mapPriceTiers(sections: LaravelVenueSection[], basePrice: number): EventPriceTier[] {
