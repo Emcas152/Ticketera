@@ -1,3 +1,4 @@
+import { DATE_PIPE_DEFAULT_OPTIONS } from '@angular/common';
 import { ApplicationConfig, importProvidersFrom, LOCALE_ID, provideBrowserGlobalErrorListeners } from '@angular/core';
 import { provideRouter, withInMemoryScrolling } from '@angular/router';
 import { provideAnimations } from '@angular/platform-browser/animations';
@@ -23,6 +24,7 @@ export const appConfig: ApplicationConfig = {
     provideAnimations(),
     provideHttpClient(withFetch(), withInterceptors([loadingInterceptor, authInterceptor, errorInterceptor])),
     importProvidersFrom(MatSnackBarModule),
-    { provide: LOCALE_ID, useValue: 'es-GT' }
+    { provide: LOCALE_ID, useValue: 'es-GT' },
+    { provide: DATE_PIPE_DEFAULT_OPTIONS, useValue: { timezone: '-0600' } }
   ]
 };

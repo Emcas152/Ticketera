@@ -163,7 +163,7 @@ export class EventService {
       name: input.name,
       category: input.category,
       city: input.city,
-      date: new Date(`${input.date}T${input.time || '19:00'}`).toISOString(),
+      date: this.toEventIso(input.date, input.time),
       time: input.time,
       location: input.location,
       venueName: input.venueName,
@@ -187,7 +187,7 @@ export class EventService {
   }
 
   private mapAdminInputToLaravel(input: EventAdminInput): LaravelEventInput {
-    const startsAt = new Date(`${input.date}T${input.time || '19:00'}`).toISOString();
+    const startsAt = this.toEventIso(input.date, input.time);
 
     return {
       venue_id: Number(input.venueId),
@@ -200,7 +200,7 @@ export class EventService {
       starts_at: startsAt,
       ends_at: new Date(new Date(startsAt).getTime() + 3 * 60 * 60 * 1000).toISOString(),
       presale_starts_at: input.presaleStartsAt
-        ? new Date(input.presaleStartsAt).toISOString()
+        ? this.toEventIso(...input.presaleStartsAt.split('T', 2) as [string, string])
         : null
     };
   }
@@ -249,7 +249,7 @@ export class EventService {
   }
 
   private mapLaravelEvent(event: LaravelEvent): EventItem {
-    const date = event.starts_at ?? new Date().toISOString();
+    const date = this.normalizeApiDate(event.starts_at) ?? new Date().toISOString();
     const venue = event.venue;
     const sections = venue?.sections ?? [];
     const seats = sections.flatMap((section) => section.seats ?? []);
@@ -264,7 +264,7 @@ export class EventService {
       category: event.category ?? 'general',
       city: venue?.city ?? 'Guatemala',
       date,
-      time: new Intl.DateTimeFormat('es-GT', { hour: '2-digit', minute: '2-digit', hour12: false }).format(new Date(date)),
+      time: new Intl.DateTimeFormat('es-GT', { timeZone: 'America/Guatemala', hour: '2-digit', minute: '2-digit', hour12: false }).format(new Date(date)),
       location: venue?.name ?? 'Venue pendiente',
       venueName: venue?.name ?? 'Venue pendiente',
       address: venue?.address ?? '',
@@ -291,6 +291,26 @@ export class EventService {
           }))
         : this.mapPriceTiers(sections, basePrice)
     };
+  }
+
+  getEventLocalParts(value: string): { date: string; time: string } {
+    const normalized = this.normalizeApiDate(value) ?? value;
+    const parts = new Intl.DateTimeFormat('en-CA', {
+      timeZone: 'America/Guatemala', year: 'numeric', month: '2-digit', day: '2-digit',
+      hour: '2-digit', minute: '2-digit', hour12: false
+    }).formatToParts(new Date(normalized));
+    const part = (type: Intl.DateTimeFormatPartTypes) => parts.find((item) => item.type === type)?.value ?? '';
+    return { date: `${part('year')}-${part('month')}-${part('day')}`, time: `${part('hour')}:${part('minute')}` };
+  }
+
+  private toEventIso(date: string, time = '19:00'): string {
+    return new Date(`${date}T${time || '19:00'}:00-06:00`).toISOString();
+  }
+
+  private normalizeApiDate(value?: string | null): string | null {
+    if (!value) return null;
+    if (/Z$|[+-]\d{2}:?\d{2}$/.test(value)) return value;
+    return `${value.replace(' ', 'T')}Z`;
   }
 
   private mapPriceTiers(sections: LaravelVenueSection[], basePrice: number): EventPriceTier[] {

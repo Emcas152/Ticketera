@@ -5,6 +5,7 @@ import { Observable, concatMap, finalize, from, map, of, switchMap, toArray } fr
 import { EventItem, EventPriceTier } from '../../core/models/event.model';
 import { Venue } from '../../core/models/venue.model';
 import { EventAdminInput, EventService } from '../../core/services/event.service';
+import { CourtesyLimit, CourtesyLimitService } from '../../core/services/courtesy-limit.service';
 import { VenueSection, VenueService } from '../../core/services/venue.service';
 import { MATERIAL_IMPORTS } from '../../shared/material/material-imports';
 import { CurrencyGtqPipe } from '../../shared/pipes/currency-gtq.pipe';
@@ -150,6 +151,21 @@ import { CurrencyGtqPipe } from '../../shared/pipes/currency-gtq.pipe';
             </mat-form-field>
 
             <mat-form-field appearance="outline">
+              <mat-label>Cortesías permitidas</mat-label>
+              <input matInput type="number" min="0" formControlName="courtesyLimit" />
+              <mat-hint>Cupo máximo para este evento</mat-hint>
+              @if (form.controls.courtesyLimit.hasError('min')) { <mat-error>El cupo no puede ser negativo.</mat-error> }
+              @if (form.controls.courtesyLimit.hasError('belowUsed')) { <mat-error>No puede ser menor que las cortesías usadas.</mat-error> }
+            </mat-form-field>
+
+            @if (editingEvent && courtesyLimit) {
+              <div class="courtesy-summary">
+                <span>Usadas <strong>{{ courtesyLimit.used }}</strong></span>
+                <span>Disponibles <strong>{{ courtesyAvailable }}</strong></span>
+              </div>
+            }
+
+            <mat-form-field appearance="outline">
               <mat-label>Estado</mat-label>
               <mat-select formControlName="status">
                 <mat-option value="draft">Borrador</mat-option>
@@ -220,6 +236,9 @@ import { CurrencyGtqPipe } from '../../shared/pipes/currency-gtq.pipe';
                   <span>{{ event.metrics.ticketsLeft }} entradas</span>
                   <span>{{ event.basePrice | currencyGtq }}</span>
                   <span>{{ event.priceTiers.length }} localidades</span>
+                  @if (courtesyLimits[event.id]; as courtesy) {
+                    <span>{{ courtesy.used }}/{{ courtesy.maximum }} cortesías · {{ courtesy.available }} disponibles</span>
+                  }
                 </div>
               </div>
               <div class="row-actions">
@@ -302,6 +321,7 @@ import { CurrencyGtqPipe } from '../../shared/pipes/currency-gtq.pipe';
     .image-upload { display: grid; gap: 8px; color: var(--text-muted); font-size: .82rem; }
     .image-upload input { display: none; }
     .image-upload img { width: 100%; height: 120px; object-fit: cover; border-radius: 10px; }
+    .courtesy-summary{display:flex;justify-content:space-between;gap:10px;padding:12px 14px;border:1px solid #a7f3d0;border-radius:10px;background:#ecfdf5;color:#065f46}.courtesy-summary span{display:grid;gap:2px;font-size:.76rem}.courtesy-summary strong{font-size:1.15rem}
 
     .event-row {
       display: grid;
@@ -361,6 +381,7 @@ export class AdminEventsComponent implements OnInit {
   private readonly fb = inject(NonNullableFormBuilder);
   private readonly events = inject(EventService);
   private readonly venueService = inject(VenueService);
+  private readonly courtesyLimitsService = inject(CourtesyLimitService);
 
   readonly events$: Observable<EventItem[]> = this.events.events$;
   editingEvent: EventItem | null = null;
@@ -377,6 +398,8 @@ export class AdminEventsComponent implements OnInit {
   selectedImage: File | null = null;
   imagePreview = '';
   saving = false;
+  courtesyLimit: CourtesyLimit | null = null;
+  readonly courtesyLimits: Record<string, CourtesyLimit> = {};
 
   readonly form = this.fb.group({
     venueMode: ['existing' as 'existing' | 'new'],
@@ -396,6 +419,7 @@ export class AdminEventsComponent implements OnInit {
     description: ['', Validators.required],
     basePrice: [150, [Validators.required, Validators.min(0)]],
     capacity: [100, [Validators.required, Validators.min(1)]],
+    courtesyLimit: [0, [Validators.required, Validators.min(0)]],
     status: ['draft' as EventItem['status'], Validators.required],
     image: [''],
     tiersText: ['General:150'],
@@ -408,6 +432,9 @@ export class AdminEventsComponent implements OnInit {
   });
 
   get sectionControls() { return this.form.controls.sections.controls; }
+  get courtesyAvailable(): number {
+    return Math.max(0, this.form.controls.courtesyLimit.value - (this.courtesyLimit?.used ?? 0));
+  }
 
   get venueStepValid(): boolean {
     if (this.form.controls.venueMode.value === 'existing') return Boolean(this.form.controls.venueId.value);
@@ -424,7 +451,7 @@ export class AdminEventsComponent implements OnInit {
   }
 
   ngOnInit(): void {
-    this.events.getEvents().subscribe();
+    this.events.getEvents().subscribe((events) => events.forEach((event) => this.loadCourtesyLimit(event.id)));
     this.venueService.getVenues(true).subscribe((venues) => {
       this.venues = venues;
       if (!this.form.controls.venueId.value && venues.length > 0) {
@@ -435,6 +462,9 @@ export class AdminEventsComponent implements OnInit {
   }
 
   saveEvent(): void {
+    if (this.courtesyLimit && this.form.controls.courtesyLimit.value < this.courtesyLimit.used) {
+      this.form.controls.courtesyLimit.setErrors({ belowUsed: true });
+    }
     if (this.form.invalid || !this.venueStepValid || !this.sectionsStepValid || (!this.editingEvent && !this.selectedImage)) {
       this.form.markAllAsTouched();
       return;
@@ -445,20 +475,26 @@ export class AdminEventsComponent implements OnInit {
       ? this.events.updateEvent(this.editingEvent.id, this.toAdminInput())
       : this.createCompleteEvent();
 
-    request$.pipe(finalize(() => this.saving = false)).subscribe(() => this.resetForm());
+    request$.pipe(
+      switchMap((event) => this.courtesyLimitsService.save(event.id, this.form.controls.courtesyLimit.value, this.courtesyLimit?.id).pipe(map(() => event))),
+      finalize(() => this.saving = false)
+    ).subscribe(() => this.resetForm());
   }
 
   editEvent(event: EventItem): void {
     this.editingEvent = event;
+    this.courtesyLimit = null;
+    this.form.controls.courtesyLimit.setValue(0);
+    this.loadCourtesyLimit(event.id, true);
     this.selectedImage = null;
     this.imagePreview = event.image;
-    const date = new Date(event.date);
+    const localDate = this.events.getEventLocalParts(event.date);
     this.form.patchValue({
       name: event.name,
       category: event.category,
       city: event.city,
-      date: date.toISOString().slice(0, 10),
-      time: event.time,
+      date: localDate.date,
+      time: localDate.time,
       location: event.location,
       venueId: this.findVenueIdByName(event.venueName),
       venueName: event.venueName,
@@ -492,6 +528,7 @@ export class AdminEventsComponent implements OnInit {
 
   resetForm(): void {
     this.editingEvent = null;
+    this.courtesyLimit = null;
     this.selectedImage = null;
     this.imagePreview = '';
     this.form.reset({
@@ -512,6 +549,7 @@ export class AdminEventsComponent implements OnInit {
       description: '',
       basePrice: 150,
       capacity: 100,
+      courtesyLimit: 0,
       status: 'draft',
       image: '',
       tiersText: 'General:150',
@@ -642,6 +680,24 @@ export class AdminEventsComponent implements OnInit {
     this.venueService.getVenueSections(venueId).subscribe((sections) => {
       this.form.controls.sections.clear();
       sections.forEach((section) => this.addSection(section));
+    });
+  }
+
+  private loadCourtesyLimit(eventId: string, applyToForm = false): void {
+    this.courtesyLimitsService.getByEvent(eventId).subscribe({
+      next: (limit) => {
+        this.courtesyLimits[eventId] = limit;
+        if (applyToForm && this.editingEvent?.id === eventId) {
+          this.courtesyLimit = limit;
+          this.form.controls.courtesyLimit.setValue(limit.maximum);
+        }
+      },
+      error: (error: { status?: number }) => {
+        if (error.status !== 404) return;
+        const empty = { eventId, maximum: 0, used: 0, available: 0 };
+        this.courtesyLimits[eventId] = empty;
+        if (applyToForm && this.editingEvent?.id === eventId) this.courtesyLimit = empty;
+      }
     });
   }
 
