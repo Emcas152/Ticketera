@@ -98,32 +98,60 @@ import { CurrencyGtqPipe } from '../../shared/pipes/currency-gtq.pipe';
         </div>
 
         <div #viewport class="venue-viewport" *ngIf="seatMap as map">
-          <div class="selection-summary" style="padding:18px;">
-            <h3 style="margin:0 0 8px">Resumen de selección</h3>
-            <p style="margin:0 0 12px;color:var(--text-muted)">{{ selectedSeats.length }} seleccionado(s) · {{ availableCount }} disponibles de {{ totalSeatCount }} en {{ totalTableCount }} mesas</p>
+          <svg #svgContainer class="venue-map"
+            width="100%" height="100%"
+            [attr.viewBox]="viewBoxX + ' ' + viewBoxY + ' ' + viewBoxW + ' ' + viewBoxH"
+            preserveAspectRatio="xMidYMid meet"
+            (wheel)="onWheel($event)" (mousedown)="onMouseDown($event)"
+            (mousemove)="onMouseMove($event)" (mouseup)="onMouseUp()" (mouseleave)="onMouseUp()">
+            <rect x="0" y="0" [attr.width]="map.width" [attr.height]="map.height" fill="#a8a8a8" />
 
-            <div *ngIf="selectedSeats.length === 0" style="color:var(--text-muted)">No hay asientos seleccionados. Usa el selector en el formulario para añadir asientos.</div>
+            @for (section of map.sections; track section.id) {
+              @if (section.polygon) { <polygon [attr.points]="section.polygon" class="map-zone" [ngClass]="zoneClass(section.name)" /> }
+              <text [attr.x]="section.labelX" [attr.y]="section.labelY" text-anchor="middle" class="zone-label" [ngClass]="zoneLabelClass(section.name)">{{ section.name }}</text>
+            }
 
-            <div *ngIf="selectedSeats.length > 0">
-              <div style="display:flex;gap:12px;align-items:center;margin-bottom:12px">
-                <strong>Total:</strong>
-                <div>{{ total | currencyGtq }}</div>
-              </div>
+            @if (layoutElements.length === 0 && map.stage) {
+              <g class="stage"><rect [attr.x]="map.stage.x" [attr.y]="map.stage.y" [attr.width]="map.stage.width" [attr.height]="map.stage.height" rx="12" />
+                <text [attr.x]="map.stage.x + map.stage.width / 2" [attr.y]="map.stage.y + map.stage.height / 2" text-anchor="middle" dominant-baseline="middle">{{ map.stage.label }}</text></g>
+            }
+            @for (element of sortedLayoutElements; track element.id) {
+              <g [attr.transform]="elementTransform(element)" [ngClass]="element.kind">
+                @if (element.kind === 'entrance') { <path [attr.d]="entryArrowPath(element.w, element.h)" [attr.fill]="element.color" /> }
+                @else { <rect width="100%" height="100%" [attr.width]="element.w" [attr.height]="element.h" rx="10" [attr.fill]="element.color" /> }
+                <text [attr.x]="element.w / 2" [attr.y]="element.h / 2" text-anchor="middle" dominant-baseline="middle" [ngClass]="element.kind === 'zone' ? 'zone-label' : 'stage-label'">{{ element.label }}</text>
+              </g>
+            }
 
-              <div style="max-height:60vh;overflow:auto;border-radius:8px;padding:8px;background:rgba(0,0,0,0.03)">
-                <div *ngFor="let seat of selectedSeats" style="display:flex;justify-content:space-between;align-items:center;padding:10px 8px;border-bottom:1px solid rgba(0,0,0,0.04)">
-                  <div>
-                    <div style="font-weight:700">{{ seat.section }} {{ seat.label }} · {{ seat.number }}</div>
-                    <div style="font-size:.85rem;color:var(--text-muted)">Precio: {{ seat.price | currencyGtq }} · Estado: <span [style.fontWeight]="700">{{ seat.status }}</span></div>
-                  </div>
-                  <div style="display:flex;gap:8px;align-items:center">
-                    <button mat-icon-button color="warn" type="button" aria-label="Quitar" (click)="removeSelectedSeat(seat.id)"><mat-icon>close</mat-icon></button>
-                  </div>
-                </div>
-              </div>
-            </div>
+            @for (table of map.tables; track table.id) {
+              <g class="table" [class.table-selectable]="courtesyMode" [class.table-selected]="isTableSelected(table)"
+                [attr.transform]="'translate(' + table.x + ' ' + table.y + ') rotate(' + (table.rotation || 0) + ' ' + table.width / 2 + ' ' + table.height / 2 + ')'"
+                (click)="selectTable(table, $event)">
+                <rect [attr.width]="table.width" [attr.height]="table.height" rx="7" [ngClass]="tableClass(table.sectionName)" />
+                <text [attr.x]="table.width / 2" [attr.y]="table.height / 2" text-anchor="middle" dominant-baseline="middle">{{ table.label }}</text>
+              </g>
+            }
+
+            @for (seat of allSeats; track seat.id) {
+              <g class="seat" [ngClass]="[seatSectionClass(seat), seat.status, isSelected(seat) ? 'selected' : '', activeSectionId && seat.sectionId !== activeSectionId ? 'inactive' : '', validatingSeatId === seat.id ? 'validating' : '']"
+                [attr.transform]="'translate(' + seat.x + ' ' + seat.y + ')'" [attr.aria-label]="seat.section + ', asiento ' + seat.number"
+                role="button" tabindex="0" (click)="$event.stopPropagation(); toggleSeat(seat)" (keydown.enter)="toggleSeat(seat)">
+                <circle [attr.r]="seat.radius || 6.5" /><text y="2.8" text-anchor="middle">{{ seat.number }}</text>
+              </g>
+            }
+          </svg>
+
+          <div class="map-controls-bar" aria-label="Controles del mapa">
+            <button class="control-btn center-btn" type="button" (click)="resetView()">Centrar</button>
+            <button class="control-btn zoom-icon-btn" type="button" aria-label="Alejar" (click)="zoomOut()">−</button>
+            <button class="control-btn zoom-icon-btn" type="button" aria-label="Acercar" (click)="zoomIn()">+</button>
           </div>
         </div>
+
+        @if (selectedSeats.length > 0) {
+          <div class="selection-strip"><strong>{{ selectedSeats.length }} seleccionado(s) · {{ total | currencyGtq }}</strong>
+            <span>{{ selectedSeatSummary }}</span></div>
+        }
       </article>
 
       <article class="panel-surface ticket-result" *ngIf="lastBooking"><div><p class="eyebrow">Entrada generada</p><h2>{{ lastBooking.eventName }}</h2>
@@ -144,6 +172,7 @@ import { CurrencyGtqPipe } from '../../shared/pipes/currency-gtq.pipe';
     .seat{cursor:pointer;outline:none}.seat circle{stroke:rgba(255,255,255,.24);stroke-width:1;transition:.15s}.seat.seat-diamante circle{fill:#091f49}.seat.seat-vip circle{fill:#e06000}.seat.seat-general circle{fill:#008080}.seat text{fill:#fff;font-size:8px;font-weight:800;pointer-events:none}.seat:hover circle,.seat:focus circle{filter:brightness(1.15);stroke:#fff;stroke-width:2.5}
     .seat.selected circle{fill:#ffe066;stroke:#111827;stroke-width:2}.seat.selected text{fill:#111827}.seat.reserved text,.seat.sold text{fill:white}.seat.reserved,.seat.sold{cursor:not-allowed}.seat.reserved circle{fill:#f59e0b;stroke:#92400e}.seat.sold circle{fill:#ef4444;stroke:#991b1b}.seat.validating{pointer-events:none;opacity:.55}.seat.inactive,.table.inactive{opacity:.25}.seat.selected{opacity:1}
     .map-controls-bar{position:absolute;bottom:16px;right:16px;z-index:20;display:flex;border-radius:6px;overflow:hidden;background:#18181b;box-shadow:0 4px 12px rgba(0,0,0,.35)}.control-btn{height:36px;border:0;background:#18181b;color:#fff;font-weight:700;cursor:pointer}.control-btn:hover{background:#27272a}.center-btn{padding:0 16px;font-size:12px;text-transform:uppercase;letter-spacing:.14em;border-right:1px solid rgba(255,255,255,.15)}.zoom-icon-btn{width:36px;font-size:18px;border-right:1px solid rgba(255,255,255,.15)}
+    .selection-strip{display:flex;justify-content:space-between;gap:14px;margin-top:12px;padding:12px 14px;border:1px solid #ddd6fe;border-radius:10px;background:#f5f3ff;color:#4c1d95;font-size:.82rem}.selection-strip span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
     .live-status{display:flex;align-items:center;gap:6px;color:#166534;font-size:.78rem;font-weight:700}.live-status i{width:8px;height:8px;border-radius:50%;background:#22c55e;box-shadow:0 0 0 4px rgba(34,197,94,.16)}
     .ticket-result{margin-top:18px;padding:20px}.ticket-result h2{margin:4px 0}@media(max-width:1100px){.controls{grid-template-columns:1fr 1fr}.controls mat-form-field:first-child{grid-column:1/-1}}@media(max-width:700px){.controls{grid-template-columns:1fr}.controls mat-form-field:first-child{grid-column:auto}.map-heading,.ticket-result{align-items:flex-start;flex-direction:column}.venue-viewport{width:100%;height:auto;aspect-ratio:1900/2120}}
   `]
@@ -256,6 +285,10 @@ export class CashSalesComponent implements OnInit {
     return [...this.layoutElements].sort((a, b) => order[a.kind] - order[b.kind]);
   }
   get total(): number { return this.form.controls.type.value === 'courtesy' ? 0 : this.booking.getTotals(this.selectedSeats).total; }
+  get selectedSeatSummary(): string {
+    const labels = this.selectedSeats.slice(0, 5).map((seat) => `${seat.section} ${seat.label}`).join(', ');
+    return `${labels}${this.selectedSeats.length > 5 ? '…' : ''}`;
+  }
 
   loadEvent(): void {
     const eventId = this.form.controls.eventId.value;
