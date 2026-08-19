@@ -665,9 +665,9 @@ export class ReservationsComponent {
           'NIT': this.customerNit(b),
           'Estado': this.statusLabel(b.status),
           'Mesa / Asientos': seats,
-          'Vencimiento': b.reserved_until ? new Date(b.reserved_until).toLocaleString('es-GT') : '',
+          'Vencimiento': b.reserved_until ? new Date(b.reserved_until).toLocaleString('es-GT', { timeZone: 'America/Guatemala' }) : '',
           'Total (GTQ)': b.total,
-          'Creada': b.created_at ? new Date(b.created_at).toLocaleString('es-GT') : '',
+          'Creada': b.created_at ? new Date(b.created_at).toLocaleString('es-GT', { timeZone: 'America/Guatemala' }) : '',
         };
       });
 

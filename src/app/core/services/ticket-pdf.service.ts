@@ -424,23 +424,23 @@ export class TicketPdfService {
   }
 
   private formatDate(value: string): string {
-    return new Intl.DateTimeFormat('es-GT', { dateStyle: 'medium', timeStyle: 'short' }).format(new Date(value));
+    return new Intl.DateTimeFormat('es-GT', { timeZone: 'America/Guatemala', dateStyle: 'medium', timeStyle: 'short' }).format(new Date(value));
   }
 
   private shortDate(value: string): string {
-    return new Intl.DateTimeFormat('es-GT', { day: '2-digit', month: '2-digit', year: 'numeric' }).format(new Date(value));
+    return new Intl.DateTimeFormat('es-GT', { timeZone: 'America/Guatemala', day: '2-digit', month: '2-digit', year: 'numeric' }).format(new Date(value));
   }
 
   private time(value: string): string {
-    return new Intl.DateTimeFormat('es-GT', { hour: '2-digit', minute: '2-digit', hour12: false }).format(new Date(value));
+    return new Intl.DateTimeFormat('es-GT', { timeZone: 'America/Guatemala', hour: '2-digit', minute: '2-digit', hour12: false }).format(new Date(value));
   }
 
   private day(value: string): string {
-    return new Intl.DateTimeFormat('es-GT', { day: '2-digit' }).format(new Date(value));
+    return new Intl.DateTimeFormat('es-GT', { timeZone: 'America/Guatemala', day: '2-digit' }).format(new Date(value));
   }
 
   private month(value: string): string {
-    return new Intl.DateTimeFormat('es-GT', { month: 'short', year: 'numeric' }).format(new Date(value)).toUpperCase();
+    return new Intl.DateTimeFormat('es-GT', { timeZone: 'America/Guatemala', month: 'short', year: 'numeric' }).format(new Date(value)).toUpperCase();
   }
 
   private buyer(paymentMethod: string): string {

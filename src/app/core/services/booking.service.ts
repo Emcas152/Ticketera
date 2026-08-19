@@ -1011,6 +1011,7 @@ export class BookingService {
 
   private formatValidationDate(value: string): string {
     return new Intl.DateTimeFormat('es-GT', {
+      timeZone: 'America/Guatemala',
       dateStyle: 'medium',
       timeStyle: 'short'
     }).format(new Date(value));
