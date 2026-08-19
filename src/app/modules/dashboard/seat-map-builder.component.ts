@@ -317,11 +317,15 @@ function calculateReferenceTablePosition(tableNumber: number): { x: number; y: n
           <div class="svg-wrapper">
             <svg
               #venueSvg
-              [attr.viewBox]="'0 0 ' + CANVAS_W + ' ' + CANVAS_H"
+              [attr.viewBox]="viewBoxX + ' ' + viewBoxY + ' ' + viewBoxW + ' ' + viewBoxH"
               preserveAspectRatio="xMidYMid meet"
               width="100%"
+              height="100%"
+              [class.is-panning]="isPanning"
+              (wheel)="onCanvasWheel($event, venueSvg)"
+              (pointerdown)="startCanvasPan($event, venueSvg)"
               (pointermove)="onCanvasPointerMove($event, venueSvg)"
-              (pointerup)="endDrag()"
+              (pointerup)="endDrag($event, venueSvg)"
               (pointerleave)="endDrag()"
             >
               <rect x="0" y="0" [attr.width]="CANVAS_W" [attr.height]="CANVAS_H" fill="#a7a7a7" />
@@ -448,7 +452,7 @@ function calculateReferenceTablePosition(tableNumber: number): { x: number; y: n
 
             <!-- Floating Controls matching alconProducciones -->
             <div class="map-controls-bar">
-              <button type="button" class="control-btn center-btn" (click)="resetLayout()">Centrar</button>
+              <button type="button" class="control-btn center-btn" (click)="resetViewport()">Centrar</button>
               <button type="button" class="control-btn zoom-icon-btn" (click)="zoomIn()">+</button>
               <button type="button" class="control-btn zoom-icon-btn" (click)="zoomOut()">&minus;</button>
             </div>
@@ -458,7 +462,7 @@ function calculateReferenceTablePosition(tableNumber: number): { x: number; y: n
     </section>
   `,
   styles: [`
-    .builder-root{display:grid;gap:24px}.builder-header{display:flex;justify-content:space-between;gap:16px;align-items:center;padding:20px 24px;border-radius:var(--radius-lg);background:#142238;color:#fff}.eyebrow{margin:0;color:#78b7ff;font-size:.72rem;text-transform:uppercase;letter-spacing:.08em}.builder-header h1{margin:0;color:#fff;font-size:1.5rem}.header-desc,.preview-subtitle,.edit-panel p{margin:4px 0 0;color:var(--text-muted);font-size:.84rem}.back-btn{color:#fff!important;border-color:rgba(255,255,255,.28)!important}.builder-layout{display:grid;grid-template-columns:380px minmax(0,1fr);gap:24px;align-items:start}.config-panel,.preview-panel{display:grid;gap:18px}.config-top,.preview-top,.section-item-header,.panel-title-row,.section-actions{display:flex;align-items:center;justify-content:space-between;gap:12px}.preview-top{flex-wrap:wrap}.config-title{font-weight:800}.sections-list{display:grid;gap:14px;max-height:460px;overflow:auto;padding-right:4px}.section-item,.tool-panel,.edit-panel,.config-summary{display:grid;gap:12px;padding:14px;border:1px solid var(--surface-border);border-radius:12px;background:#f8fafc}.two-col{display:grid;grid-template-columns:1fr 1fr;gap:10px}.table-counter{display:flex;align-items:center;justify-content:space-between}.color-dot{width:14px;height:14px;border-radius:50%;border:2px solid rgba(0,0,0,.12)}.section-index{flex:1;font-size:.74rem;font-weight:800;text-transform:uppercase;letter-spacing:.08em;color:var(--text-muted)}.color-swatches{display:flex;gap:8px;flex-wrap:wrap}.swatch{width:28px;height:28px;border-radius:50%;border:2px solid transparent;cursor:pointer}.swatch-active{border-color:#111827}.tool-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px}.element-list{display:flex;flex-wrap:wrap;gap:8px}.element-chip{display:inline-flex;align-items:center;gap:8px;padding:8px 10px;border:1px solid var(--surface-border);border-radius:8px;background:#fff;color:#111827;font-weight:700;cursor:pointer}.element-chip span{width:12px;height:12px;border-radius:50%}.element-chip.is-active{border-color:#111827;box-shadow:0 0 0 2px rgba(17,24,39,.08)}.orientation-row{display:grid;grid-template-columns:44px 1fr 44px;gap:8px;align-items:center}.summary-row{display:flex;justify-content:space-between;font-size:.86rem}.summary-row span{color:var(--text-muted)}.save-btn{height:48px;border-radius:10px!important;font-weight:800}    .svg-wrapper{position:relative;display:grid;place-items:center;background:#a8a8a8!important;border:1px solid var(--surface-border);border-radius:12px;overflow:auto;padding:16px;max-height:calc(100vh - 230px);min-height:420px}.svg-wrapper svg{display:block;width:min(100%,1040px);height:auto;max-height:calc(100vh - 270px);min-width:0}.plan-element,.svg-table-group{cursor:grab}.plan-element.is-selected>rect,.svg-table-group.selected rect{stroke:#111827;stroke-width:3}.table-rotate-handle line{stroke:#111827;stroke-width:2}.table-rotate-handle circle{fill:#111827;stroke:#fff;stroke-width:2}.resize-handle{cursor:nwse-resize}.resize-handle rect{fill:#111827;stroke:#fff;stroke-width:2}.resize-handle path{stroke:#fff;stroke-width:2;stroke-linecap:round;fill:none}.selected-seat{stroke:#111827;stroke-width:2.5}.stage-label,.entry-label,.bathroom-title{font-family:Bahnschrift,'Arial Narrow',Arial,sans-serif;font-weight:900;letter-spacing:.06em}.stage-label{font-size:34px;fill:#fff7ed}.entry-label{font-size:42px;fill:#020617}.bathroom-title{font-size:30px;fill:#fff}.bathroom-icon{font-size:44px;font-weight:900;fill:#fff}
+    .builder-root{display:grid;gap:24px}.builder-header{display:flex;justify-content:space-between;gap:16px;align-items:center;padding:20px 24px;border-radius:var(--radius-lg);background:#142238;color:#fff}.eyebrow{margin:0;color:#78b7ff;font-size:.72rem;text-transform:uppercase;letter-spacing:.08em}.builder-header h1{margin:0;color:#fff;font-size:1.5rem}.header-desc,.preview-subtitle,.edit-panel p{margin:4px 0 0;color:var(--text-muted);font-size:.84rem}.back-btn{color:#fff!important;border-color:rgba(255,255,255,.28)!important}.builder-layout{display:grid;grid-template-columns:380px minmax(0,1fr);gap:24px;align-items:start}.config-panel,.preview-panel{display:grid;gap:18px}.config-top,.preview-top,.section-item-header,.panel-title-row,.section-actions{display:flex;align-items:center;justify-content:space-between;gap:12px}.preview-top{flex-wrap:wrap}.config-title{font-weight:800}.sections-list{display:grid;gap:14px;max-height:460px;overflow:auto;padding-right:4px}.section-item,.tool-panel,.edit-panel,.config-summary{display:grid;gap:12px;padding:14px;border:1px solid var(--surface-border);border-radius:12px;background:#f8fafc}.two-col{display:grid;grid-template-columns:1fr 1fr;gap:10px}.table-counter{display:flex;align-items:center;justify-content:space-between}.color-dot{width:14px;height:14px;border-radius:50%;border:2px solid rgba(0,0,0,.12)}.section-index{flex:1;font-size:.74rem;font-weight:800;text-transform:uppercase;letter-spacing:.08em;color:var(--text-muted)}.color-swatches{display:flex;gap:8px;flex-wrap:wrap}.swatch{width:28px;height:28px;border-radius:50%;border:2px solid transparent;cursor:pointer}.swatch-active{border-color:#111827}.tool-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px}.element-list{display:flex;flex-wrap:wrap;gap:8px}.element-chip{display:inline-flex;align-items:center;gap:8px;padding:8px 10px;border:1px solid var(--surface-border);border-radius:8px;background:#fff;color:#111827;font-weight:700;cursor:pointer}.element-chip span{width:12px;height:12px;border-radius:50%}.element-chip.is-active{border-color:#111827;box-shadow:0 0 0 2px rgba(17,24,39,.08)}.orientation-row{display:grid;grid-template-columns:44px 1fr 44px;gap:8px;align-items:center}.summary-row{display:flex;justify-content:space-between;font-size:.86rem}.summary-row span{color:var(--text-muted)}.save-btn{height:48px;border-radius:10px!important;font-weight:800}.svg-wrapper{position:relative;display:grid;place-items:center;height:clamp(520px,68vh,820px);background:#a8a8a8!important;border:1px solid var(--surface-border);border-radius:12px;overflow:hidden;padding:0}.svg-wrapper svg{display:block;width:100%;height:100%;min-width:0;cursor:grab;touch-action:none;user-select:none}.svg-wrapper svg.is-panning{cursor:grabbing}.plan-element,.svg-table-group{cursor:grab}.plan-element.is-selected>rect,.svg-table-group.selected rect{stroke:#111827;stroke-width:3}.table-rotate-handle line{stroke:#111827;stroke-width:2}.table-rotate-handle circle{fill:#111827;stroke:#fff;stroke-width:2}.resize-handle{cursor:nwse-resize}.resize-handle rect{fill:#111827;stroke:#fff;stroke-width:2}.resize-handle path{stroke:#fff;stroke-width:2;stroke-linecap:round;fill:none}.selected-seat{stroke:#111827;stroke-width:2.5}.stage-label,.entry-label,.bathroom-title{font-family:Bahnschrift,'Arial Narrow',Arial,sans-serif;font-weight:900;letter-spacing:.06em}.stage-label{font-size:34px;fill:#fff7ed}.entry-label{font-size:42px;fill:#020617}.bathroom-title{font-size:30px;fill:#fff}.bathroom-icon{font-size:44px;font-weight:900;fill:#fff}
     
     /* alconProducciones Zone Styles */
     .map-zone-vip-outline{fill:rgba(69,255,25,.04);stroke:rgba(69,255,25,.42);stroke-width:2.5px;stroke-dasharray:12 8}
@@ -519,6 +523,12 @@ export class SeatMapBuilderComponent implements OnInit {
   readonly TABLE_H = TABLE_H;
   readonly SEAT_RADIUS = SEAT_RADIUS;
 
+  viewBoxX = 0;
+  viewBoxY = 0;
+  viewBoxW = CANVAS_W;
+  viewBoxH = CANVAS_H;
+  isPanning = false;
+
   venueName = '';
   selectedVenueId: number | string | null = null;
   venues: Venue[] = [];
@@ -532,6 +542,9 @@ export class SeatMapBuilderComponent implements OnInit {
   private resizeStart = { x: 0, y: 0, w: 0, h: 0 };
   private rotationStart = { angle: 0, rotation: 0 };
   private tablePositions: Record<string, { x: number; y: number; rotation: number }> = {};
+  private panPointerId: number | null = null;
+  private panStartClient = { x: 0, y: 0 };
+  private panStartView = { x: 0, y: 0 };
 
   sections: SectionDef[] = [];
   planElements: PlanElement[] = [];
@@ -587,8 +600,38 @@ export class SeatMapBuilderComponent implements OnInit {
     return Number.isFinite(num) ? Math.floor((num - 1) / 10) + 1 : 1;
   }
 
-  zoomIn(): void {}
-  zoomOut(): void {}
+  zoomIn(): void {
+    this.zoomViewport(0.8);
+  }
+
+  zoomOut(): void {
+    this.zoomViewport(1.25);
+  }
+
+  resetViewport(): void {
+    this.viewBoxX = 0;
+    this.viewBoxY = 0;
+    this.viewBoxW = CANVAS_W;
+    this.viewBoxH = CANVAS_H;
+  }
+
+  onCanvasWheel(event: WheelEvent, svg: Element): void {
+    event.preventDefault();
+    const rect = svg.getBoundingClientRect();
+    const anchorX = rect.width ? this.clamp((event.clientX - rect.left) / rect.width, 0, 1) : 0.5;
+    const anchorY = rect.height ? this.clamp((event.clientY - rect.top) / rect.height, 0, 1) : 0.5;
+    this.zoomViewport(event.deltaY < 0 ? 0.88 : 1.14, anchorX, anchorY);
+  }
+
+  startCanvasPan(event: PointerEvent, svg: Element): void {
+    if (event.button !== 0) return;
+    event.preventDefault();
+    this.isPanning = true;
+    this.panPointerId = event.pointerId;
+    this.panStartClient = { x: event.clientX, y: event.clientY };
+    this.panStartView = { x: this.viewBoxX, y: this.viewBoxY };
+    (svg as SVGSVGElement).setPointerCapture?.(event.pointerId);
+  }
 
   sectionLabelWidth(label: string): number {
     return Math.max(180, (label || '').length * 24 + 36);
@@ -854,6 +897,15 @@ export class SeatMapBuilderComponent implements OnInit {
   }
 
   onCanvasPointerMove(event: PointerEvent, svg: Element): void {
+    if (this.isPanning && this.panPointerId === event.pointerId) {
+      const rect = svg.getBoundingClientRect();
+      if (rect.width && rect.height) {
+        this.viewBoxX = this.panStartView.x - (event.clientX - this.panStartClient.x) * this.viewBoxW / rect.width;
+        this.viewBoxY = this.panStartView.y - (event.clientY - this.panStartClient.y) * this.viewBoxH / rect.height;
+      }
+      return;
+    }
+
     const point = this.getSvgPoint(event, svg);
 
     if (this.resizingElementId) {
@@ -880,11 +932,16 @@ export class SeatMapBuilderComponent implements OnInit {
     }
   }
 
-  endDrag(): void {
+  endDrag(event?: PointerEvent, svg?: Element): void {
     this.draggingTableId = '';
     this.rotatingTableId = '';
     this.draggingElementId = '';
     this.resizingElementId = '';
+    if (this.panPointerId !== null && event && svg) {
+      (svg as SVGSVGElement).releasePointerCapture?.(this.panPointerId);
+    }
+    this.panPointerId = null;
+    this.isPanning = false;
   }
 
   updateSelectedTablePosition(axis: 'x' | 'y', value: number | string): void {
@@ -918,6 +975,7 @@ export class SeatMapBuilderComponent implements OnInit {
     this.tablePositions = {};
     this.selectedTableId = '';
     this.selectedElementId = '';
+    this.resetViewport();
   }
 
   saveMap(): void {
@@ -1357,6 +1415,17 @@ export class SeatMapBuilderComponent implements OnInit {
     point.y = event.clientY;
     const transformed = point.matrixTransform(svg.getScreenCTM()?.inverse());
     return { x: transformed.x, y: transformed.y };
+  }
+
+  private zoomViewport(factor: number, anchorX = 0.5, anchorY = 0.5): void {
+    const minWidth = CANVAS_W * 0.18;
+    const maxWidth = CANVAS_W * 2.5;
+    const nextWidth = this.clamp(this.viewBoxW * factor, minWidth, maxWidth);
+    const nextHeight = nextWidth * CANVAS_H / CANVAS_W;
+    this.viewBoxX += (this.viewBoxW - nextWidth) * anchorX;
+    this.viewBoxY += (this.viewBoxH - nextHeight) * anchorY;
+    this.viewBoxW = nextWidth;
+    this.viewBoxH = nextHeight;
   }
 
   private clamp(value: number, min: number, max: number): number {
