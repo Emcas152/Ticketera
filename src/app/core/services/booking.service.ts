@@ -234,7 +234,11 @@ export class BookingService {
       );
   }
 
-  generateCourtesyTickets(bookingId: number | string): Observable<{ success: boolean; message?: string; booking_id?: number | string; tickets_count?: number }> {
+  generateCourtesyTickets(
+    bookingId: number | string,
+    beneficiaryEmail?: string,
+    beneficiaryName?: string
+  ): Observable<{ success: boolean; message?: string; booking_id?: number | string; tickets_count?: number; email_sent?: boolean }> {
     if (environment.useMocks) {
       return of({
         success: true,
@@ -244,9 +248,17 @@ export class BookingService {
       }).pipe(delay(400));
     }
 
-    return this.api.post<{ success: boolean; message?: string; booking_id?: number | string; tickets_count?: number }>('/tickets/courtesy', {
-      booking_id: Number(bookingId)
-    });
+    return this.api.post<{ success: boolean; message?: string; booking_id?: number | string; tickets_count?: number; email_sent?: boolean }>('/tickets/courtesy', {
+      booking_id: Number(bookingId),
+      beneficiary_email: beneficiaryEmail?.trim() || undefined,
+      beneficiary_name: beneficiaryName?.trim() || undefined
+    }).pipe(
+      tap((result) => {
+        if (result.email_sent === false) {
+          this.notifications.error(result.message || 'La cortesía fue generada, pero no se pudo enviar por correo.');
+        }
+      })
+    );
   }
 
   assignCourtesySeats(eventId: number | string, seatIds: Array<number | string>, beneficiaryName = 'Cortesía VIP'): Observable<{ success: boolean; message?: string; tickets_count?: number }> {
@@ -404,8 +416,8 @@ export class BookingService {
       send_ticket_email: true
     }).pipe(
       switchMap((reservation) => {
-        const issue$ = type === 'courtesy'
-          ? this.generateCourtesyTickets(reservation.booking_id)
+        const issue$: Observable<unknown> = type === 'courtesy'
+          ? this.generateCourtesyTickets(reservation.booking_id, payment.customerEmail, customerName)
           : this.confirmManualPayment(reservation.booking_id, customerName, customerPhone, payment);
 
         return issue$.pipe(map(() => reservation));
