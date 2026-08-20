@@ -598,6 +598,7 @@ export class AccessValidatorComponent implements OnInit, OnDestroy {
   private lastScannedPayload = '';
   private lastScanTime = 0;
   private audioCtx: AudioContext | null = null;
+  private validationInProgress = false;
 
   ngOnInit(): void {
     this.enumerateVideoDevices();
@@ -721,17 +722,20 @@ export class AccessValidatorComponent implements OnInit, OnDestroy {
   }
 
   private processQrPayload(payload: string): void {
-    const res = this.booking.validateTicketQr(payload);
-    this.result.set(res);
-    this.playAudioFeedback(res.status === 'valid');
+    if (this.validationInProgress) return;
+    this.validationInProgress = true;
+    this.booking.authorizeTicketQr(payload).subscribe((res) => {
+      this.validationInProgress = false;
+      this.result.set(res);
+      this.playAudioFeedback(res.status === 'valid');
 
-    // Add to history
-    const historyItem: ScanHistoryItem = {
-      timestamp: new Date().toISOString(),
-      result: res,
-      payload
-    };
-    this.scanHistory.update((prev) => [historyItem, ...prev.slice(0, 19)]);
+      const historyItem: ScanHistoryItem = {
+        timestamp: new Date().toISOString(),
+        result: res,
+        payload
+      };
+      this.scanHistory.update((prev) => [historyItem, ...prev.slice(0, 19)]);
+    });
   }
 
   validateManual(): void {

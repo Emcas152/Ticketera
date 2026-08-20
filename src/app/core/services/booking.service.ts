@@ -1,4 +1,5 @@
 import { inject, Injectable } from '@angular/core';
+import { HttpErrorResponse } from '@angular/common/http';
 import { BehaviorSubject, Observable, catchError, delay, map, of, switchMap, tap, throwError } from 'rxjs';
 import { environment } from '../../../environments/environment';
 import { MOCK_BOOKINGS, MOCK_EVENTS, MOCK_SEAT_MAPS } from '../mocks/mock-data';
@@ -606,6 +607,45 @@ export class BookingService {
       message: 'Acceso autorizado. El ticket quedo marcado como utilizado.',
       booking: validatedBooking
     };
+  }
+
+  authorizeTicketQr(payload: string): Observable<TicketValidationResult> {
+    const qrCode = payload.trim();
+    if (!this.looksLikeApiQrCode(qrCode)) {
+      return of({
+        status: 'invalid',
+        message: 'QR rechazado. El código no corresponde al formato de un ticket emitido.'
+      });
+    }
+
+    if (environment.useMocks) {
+      return of(this.validateTicketQr(qrCode));
+    }
+
+    return this.api.post<{ ticket_id: number; event_id: number; checked_in_at: string }>('/tickets/authorize-entry', {
+      qr_code: qrCode
+    }).pipe(
+      map(() => ({
+        status: 'valid' as const,
+        message: 'Acceso autorizado. El ticket quedó marcado como utilizado.'
+      })),
+      catchError((error: HttpErrorResponse) => {
+        const apiMessage = String(error.error?.message ?? '');
+        if (error.status === 404) {
+          return of({ status: 'unknown' as const, message: 'El QR no está registrado en el sistema.' });
+        }
+        if (error.status === 422 && /already used/i.test(apiMessage)) {
+          return of({ status: 'used' as const, message: 'Este ticket ya fue utilizado anteriormente.' });
+        }
+        if (error.status === 422) {
+          return of({ status: 'invalid' as const, message: 'El ticket está cancelado o no se encuentra activo.' });
+        }
+        if (error.status === 403) {
+          return of({ status: 'invalid' as const, message: 'No tienes autorización para validar entradas de este evento.' });
+        }
+        return of({ status: 'invalid' as const, message: 'No fue posible validar el ticket con el servidor.' });
+      })
+    );
   }
 
   clearCurrentBooking(): void {
