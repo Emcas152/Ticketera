@@ -17,6 +17,13 @@ export class ApiService {
       .pipe(map((response) => this.unwrapResponse(response)));
   }
 
+  getRaw<T, P extends object = Record<string, string | number | boolean | undefined>>(
+    path: string,
+    params?: P
+  ): Observable<T> {
+    return this.http.get<T>(this.resolveUrl(path), { params: this.createParams(params) });
+  }
+
   post<T>(path: string, body: unknown): Observable<T> {
     return this.http
       .post<T | ApiEnvelope<T> | DataEnvelope<T>>(this.resolveUrl(path), body)

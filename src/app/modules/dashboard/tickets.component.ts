@@ -1,6 +1,7 @@
 import { CommonModule, DatePipe, SlicePipe } from '@angular/common';
 import { Component, inject, OnInit } from '@angular/core';
 import { MatSnackBar } from '@angular/material/snack-bar';
+import { Observable, of, switchMap } from 'rxjs';
 import { ApiService } from '../../core/services/api.service';
 import { MATERIAL_IMPORTS } from '../../shared/material/material-imports';
 import { CurrencyGtqPipe } from '../../shared/pipes/currency-gtq.pipe';
@@ -21,6 +22,17 @@ interface TicketRow {
   bookingTotal: number;
   pdfUrl: string | null;
   canDownload: boolean;
+}
+
+interface TicketListResponse {
+  success: boolean;
+  data: any[];
+  meta: {
+    current_page: number;
+    last_page: number;
+    per_page: number;
+    total: number;
+  };
 }
 
 type TicketSortKey = 'id' | 'eventName' | 'eventDate' | 'bookingReference' | 'section' | 'status' | 'ticketType' | 'bookingTotal';
@@ -627,7 +639,7 @@ export class TicketsComponent implements OnInit {
     this.loading = true;
     this.error = null;
 
-    this.api.get<any[]>('/tickets', { per_page: 200 }).subscribe({
+    this.loadAllTicketPages().subscribe({
       next: (data) => {
         this.tickets = (Array.isArray(data) ? data : []).map((t) => this.mapTicket(t));
         this.page = 1;
@@ -638,6 +650,20 @@ export class TicketsComponent implements OnInit {
         this.loading = false;
       }
     });
+  }
+
+  private loadAllTicketPages(page = 1, accumulated: any[] = []): Observable<any[]> {
+    return this.api.getRaw<TicketListResponse, { per_page: number; page: number }>('/tickets', {
+      per_page: 200,
+      page
+    }).pipe(
+      switchMap((response) => {
+        const tickets = [...accumulated, ...(Array.isArray(response.data) ? response.data : [])];
+        return response.meta && response.meta.current_page < response.meta.last_page
+          ? this.loadAllTicketPages(page + 1, tickets)
+          : of(tickets);
+      })
+    );
   }
 
   setSearch(event: Event): void {
