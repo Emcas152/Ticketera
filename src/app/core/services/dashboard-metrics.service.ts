@@ -1,4 +1,4 @@
-import { HttpClient, HttpParams } from '@angular/common/http';
+﻿import { HttpClient, HttpParams } from '@angular/common/http';
 import { inject, Injectable } from '@angular/core';
 import { Observable } from 'rxjs';
 import { environment } from '../../../environments/environment';
@@ -10,6 +10,7 @@ export interface DashboardMetrics {
   visalink_revenue?: number;
   compraclic_revenue?: number;
   transfer_revenue?: number;
+  cortesia_revenue?: number;
   card_revenue?: number;
   payment_methods?: Array<{ method: string; bookings_count: number; revenue: number }>;
   sold_tickets: number;
@@ -22,10 +23,15 @@ export interface DashboardMetrics {
 export class DashboardMetricsService {
   private readonly http = inject(HttpClient);
 
-  get(eventIds: string[], dateFrom?: string, paymentMethod?: string): Observable<{ data: DashboardMetrics }> {
+  get(eventIds: string[], dateFrom?: string, paymentMethods?: string[] | string): Observable<{ data: DashboardMetrics }> {
     let params = new HttpParams().set('event_ids', eventIds.join(','));
     if (dateFrom) params = params.set('date_from', dateFrom);
-    if (paymentMethod) params = params.set('payment_method', paymentMethod);
+    if (paymentMethods) {
+      const methodsStr = Array.isArray(paymentMethods) ? paymentMethods.join(',') : paymentMethods;
+      if (methodsStr && methodsStr !== 'all') {
+        params = params.set('payment_methods', methodsStr).set('payment_method', methodsStr);
+      }
+    }
 
     return this.http.get<{ data: DashboardMetrics }>(
       `${environment.apiBaseUrl.replace(/\/+$/, '')}/admin/dashboard-metrics`,

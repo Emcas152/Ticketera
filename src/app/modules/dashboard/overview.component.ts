@@ -1,5 +1,5 @@
 import { AsyncPipe, CommonModule, DatePipe } from '@angular/common';
-import { Component, inject } from '@angular/core';
+import { Component, HostListener, inject } from '@angular/core';
 import { RouterLink } from '@angular/router';
 import { BehaviorSubject, combineLatest, map, of, switchMap } from 'rxjs';
 import { BookingRecord } from '../../core/models/booking.model';
@@ -53,7 +53,7 @@ interface DashboardFilters {
   eventId: string;
   category: string;
   period: 'all' | 'today' | 'week' | 'month';
-  paymentMethod: 'all' | 'efectivo' | 'visalink' | 'compraclic' | 'transferencia' | 'tarjeta' | 'cortesia';
+  paymentMethods: string[];
 }
 
 @Component({
@@ -120,18 +120,41 @@ interface DashboardFilters {
             </select>
           </label>
 
-          <label>
+          <div class="custom-multiselect-group" (click)="$event.stopPropagation()">
             <span>Método de pago</span>
-            <select [value]="filters.paymentMethod" (change)="setFilter('paymentMethod', $event)">
-              <option value="all">Todos</option>
-              <option value="efectivo">Efectivo</option>
-              <option value="visalink">VisaLink</option>
-              <option value="compraclic">CompraClick</option>
-              <option value="transferencia">Transferencia</option>
-              <option value="tarjeta">Tarjeta</option>
-              <option value="cortesia">Cortesía</option>
-            </select>
-          </label>
+            <button
+              type="button"
+              class="multiselect-trigger"
+              (click)="togglePaymentMenu($event)"
+              [class.is-open]="isPaymentMenuOpen"
+              [attr.aria-expanded]="isPaymentMenuOpen"
+            >
+              <span class="trigger-text">{{ paymentMethodsDisplayText }}</span>
+              <mat-icon class="trigger-arrow">{{ isPaymentMenuOpen ? 'arrow_drop_up' : 'arrow_drop_down' }}</mat-icon>
+            </button>
+
+            @if (isPaymentMenuOpen) {
+              <div class="multiselect-dropdown">
+                <div class="multiselect-actions">
+                  <button type="button" class="btn-text-action" (click)="selectAllPaymentMethods()">Todos</button>
+                  <span class="action-divider">·</span>
+                  <button type="button" class="btn-text-action" (click)="clearPaymentMethods()">Limpiar</button>
+                </div>
+                <div class="multiselect-options">
+                  @for (opt of paymentOptions; track opt.value) {
+                    <label class="multiselect-option" (click)="$event.stopPropagation()">
+                      <input
+                        type="checkbox"
+                        [checked]="isPaymentSelected(opt.value)"
+                        (change)="togglePaymentMethod(opt.value)"
+                      />
+                      <span>{{ opt.label }}</span>
+                    </label>
+                  }
+                </div>
+              </div>
+            }
+          </div>
 
           <button type="button" class="clear-filter" [disabled]="!vm.hasFilters" (click)="clearFilters()">
             <mat-icon>restart_alt</mat-icon>
@@ -160,41 +183,45 @@ interface DashboardFilters {
         </div>
 
         <div class="dashboard-grid">
-          <article class="panel-surface chart-card">
+          <section class="dashboard-card chart-card">
             <div class="card-head">
               <div>
-                <p class="eyebrow">Grafica</p>
-                <h2>Ventas por dia</h2>
+                <p class="eyebrow">Comportamiento</p>
+                <h2>Ventas por día</h2>
               </div>
-              <span>{{ vm.dailySales.length }} dias</span>
+              <span class="badge">Últimos 7 días</span>
             </div>
 
             <div class="bar-chart daily">
               @for (point of vm.dailySales; track point.label) {
                 <div class="bar-item">
+                  <strong class="bar-value">{{ point.display }}</strong>
                   <div class="bar-track">
                     <span [style.height.%]="point.percent"></span>
                   </div>
-                  <strong>{{ point.display }}</strong>
                   <small>{{ point.label }}</small>
                 </div>
               }
             </div>
-          </article>
+          </section>
 
-          <article class="panel-surface chart-card">
+          <section class="dashboard-card methods-card">
             <div class="card-head">
               <div>
-                <p class="eyebrow">Grafica</p>
-                <h2>Ingresos por pago</h2>
+                <p class="eyebrow">Distribución</p>
+                <h2>Métodos de pago</h2>
               </div>
-              <span>{{ vm.totalRevenue | currencyGtq }}</span>
+              <span class="badge">Aprobados</span>
             </div>
 
             <div class="payment-list">
               @for (point of vm.paymentMethods; track point.label) {
-                <button type="button" class="payment-row" [class.is-selected]="filters.paymentMethod === point.key"
-                  (click)="filterByPayment(point.key)">
+                <button
+                  type="button"
+                  class="payment-row"
+                  [class.is-selected]="point.key ? isPaymentSelected(point.key) : false"
+                  (click)="point.key && filterByPayment(point.key)"
+                >
                   <div class="payment-label">
                     <strong>{{ point.label }}</strong>
                     <span>{{ point.display }}</span>
@@ -202,75 +229,64 @@ interface DashboardFilters {
                   <div class="progress-track">
                     <span [style.width.%]="point.percent"></span>
                   </div>
-                  <small>{{ point.percent | number: '1.0-0' }}%</small>
+                  <small>{{ point.percent }}%</small>
                 </button>
               }
             </div>
-          </article>
+          </section>
 
-          <article class="panel-surface split-card">
+          <section class="dashboard-card events-card">
             <div class="card-head">
               <div>
-                <p class="eyebrow">Composicion</p>
-                <h2>Canales de ingreso</h2>
-              </div>
-            </div>
-            <div class="split-values">
-              @for (point of vm.paymentMethods; track point.label) {
-                <div>
-                  <span>{{ point.label }}</span>
-                  <strong>{{ point.value | currencyGtq }}</strong>
-                </div>
-              }
-            </div>
-          </article>
-
-          <article class="panel-surface events-card">
-            <div class="card-head">
-              <div>
-                <p class="eyebrow">Eventos</p>
+                <p class="eyebrow">Rendimiento</p>
                 <h2>Ventas por evento</h2>
               </div>
-              <a mat-stroked-button routerLink="/dashboard/eventos">Administrar</a>
+              <a mat-button color="primary" routerLink="/dashboard/eventos">Ver cartelera</a>
             </div>
 
             <div class="event-sales-list">
               @for (row of vm.eventRows; track row.event.id) {
-                <div class="event-sales-row">
-                  <div class="event-title">
+                <article class="event-sales-row">
+                  <div>
                     <strong>{{ row.event.name }}</strong>
-                    <span>{{ row.sold }} vendidas · {{ row.available }} disponibles</span>
+                    <p>{{ row.event.category }} · {{ row.event.date | date:'dd MMM yyyy' }}</p>
                   </div>
-                  <div class="event-progress">
-                    <span [style.width.%]="row.progress"></span>
+                  <div>
+                    <div class="event-progress">
+                      <span [style.width.%]="row.progress"></span>
+                    </div>
+                    <small>{{ row.sold }} vendidas · {{ row.available }} disponibles</small>
                   </div>
-                  <strong>{{ row.revenue | currencyGtq }}</strong>
-                </div>
+                  <strong class="event-revenue">{{ row.revenue | currencyGtq }}</strong>
+                </article>
               }
             </div>
-          </article>
+          </section>
 
-          <article class="panel-surface recent-card">
+          <section class="dashboard-card recent-card">
             <div class="card-head">
               <div>
                 <p class="eyebrow">Actividad</p>
-                <h2>Ultimas ventas</h2>
+                <h2>Ventas recientes</h2>
               </div>
-              <a mat-stroked-button routerLink="/dashboard/tickets">Ver tickets</a>
+              <a mat-button color="primary" routerLink="/dashboard/reservaciones">Ver todas</a>
             </div>
 
             <div class="recent-list">
               @for (booking of vm.recentBookings; track booking.id) {
-                <div class="recent-row">
+                <article class="recent-row">
                   <div>
-                    <strong>{{ booking.eventName }}</strong>
-                    <p>{{ booking.createdAt | date: 'd MMM, h:mm a' }} · {{ booking.paymentMethod }}</p>
+                    <strong>{{ booking.code }}</strong>
+                    <p>{{ booking.eventName }} · {{ booking.customer.name }}</p>
                   </div>
-                  <span>{{ booking.totals.total | currencyGtq }}</span>
-                </div>
+                  <div>
+                    <strong>{{ booking.totals.total | currencyGtq }}</strong>
+                    <small>{{ booking.createdAt | date:'short' }}</small>
+                  </div>
+                </article>
               }
             </div>
-          </article>
+          </section>
         </div>
       </ng-container>
     </section>
@@ -278,223 +294,361 @@ interface DashboardFilters {
   styles: [`
     .sales-dashboard {
       display: grid;
-      gap: 22px;
-      width: min(100%, var(--page-max));
-      margin: 0 auto;
+      gap: 24px;
+    }
+
+    .sales-hero {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 20px;
+      padding: 28px 32px;
+      border-radius: 20px;
+      background: linear-gradient(135deg, rgba(106, 0, 255, 0.08), rgba(255, 77, 0, 0.08));
+      border: 1px solid var(--surface-border);
+    }
+
+    .sales-hero h1 {
+      margin: 4px 0 8px;
+      font-size: 2rem;
+      font-weight: 800;
+    }
+
+    .sales-hero p {
+      margin: 0;
+      color: var(--text-muted);
+    }
+
+    .hero-actions {
+      display: flex;
+      gap: 12px;
+      flex-wrap: wrap;
     }
 
     .filter-panel {
       display: grid;
-      grid-template-columns: minmax(190px, 1.15fr) repeat(4, minmax(140px, 1fr)) auto;
+      grid-template-columns: minmax(180px, auto) repeat(4, minmax(140px, 1fr)) auto;
       gap: 12px;
-      align-items: end;
-      padding: 16px 18px;
-      border: 1px solid var(--surface-border);
+      align-items: center;
+      padding: 16px 20px;
       border-radius: 16px;
-      background: #fff;
-      box-shadow: var(--shadow-soft);
+      background: #ffffff;
+      border: 1px solid var(--surface-border);
+      box-shadow: 0 2px 10px rgba(0, 0, 0, 0.04);
     }
 
     .filter-title {
       display: flex;
       align-items: center;
-      gap: 11px;
-      align-self: center;
+      gap: 10px;
     }
-
-    .filter-title small,
-    .filter-panel label span {
-      display: block;
-      color: var(--text-muted);
-      font-size: 0.72rem;
-    }
-
-    .filter-title small { margin-top: 3px; }
 
     .filter-icon {
-      display: grid;
-      place-items: center;
+      display: flex;
+      align-items: center;
+      justify-content: center;
       width: 38px;
       height: 38px;
       border-radius: 10px;
-      color: #fff;
       background: var(--brand-gradient);
+      color: #ffffff;
     }
 
-    .filter-panel label span {
-      margin: 0 0 6px 2px;
+    .filter-title strong {
+      display: block;
+      font-size: 0.95rem;
       font-weight: 700;
+    }
+
+    .filter-title small {
+      color: var(--text-muted);
+      font-size: 0.78rem;
+    }
+
+    .filter-panel label {
+      display: grid;
+      gap: 5px;
+      font-size: 0.75rem;
+      font-weight: 700;
+      letter-spacing: 0.04em;
       text-transform: uppercase;
-      letter-spacing: 0.05em;
+      color: #64748b;
     }
 
     .filter-panel select {
-      width: 100%;
       height: 42px;
-      padding: 0 34px 0 12px;
-      border: 1px solid #d9dce3;
-      border-radius: 9px;
-      background: #fff;
-      color: var(--text-primary);
-      font: 500 0.84rem Montserrat, sans-serif;
+      padding: 0 12px;
+      border-radius: 10px;
+      border: 1.5px solid #d5dded;
+      background: #ffffff;
+      font-size: 0.88rem;
+      font-weight: 600;
+      color: #0f172a;
+      outline: none;
+      transition: border-color 0.2s;
       cursor: pointer;
     }
 
     .filter-panel select:focus {
-      border-color: var(--brand-primary);
-      outline: 3px solid rgba(106, 0, 255, 0.1);
+      border-color: #004489;
+    }
+
+    .custom-multiselect-group {
+      position: relative;
+      display: grid;
+      gap: 5px;
+      font-size: 0.75rem;
+      font-weight: 700;
+      letter-spacing: 0.04em;
+      text-transform: uppercase;
+      color: #64748b;
+    }
+
+    .multiselect-trigger {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      height: 42px;
+      padding: 0 12px;
+      border-radius: 10px;
+      border: 1.5px solid #d5dded;
+      background: #ffffff;
+      font-size: 0.88rem;
+      font-weight: 600;
+      color: #0f172a;
+      cursor: pointer;
+      text-transform: none;
+      letter-spacing: normal;
+      transition: border-color 0.2s;
+      width: 100%;
+      text-align: left;
+    }
+
+    .multiselect-trigger:hover,
+    .multiselect-trigger.is-open {
+      border-color: #004489;
+    }
+
+    .trigger-text {
+      flex: 1;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+
+    .trigger-arrow {
+      color: #64748b;
+      font-size: 20px;
+      height: 20px;
+      width: 20px;
+      margin-left: 4px;
+    }
+
+    .multiselect-dropdown {
+      position: absolute;
+      top: calc(100% + 6px);
+      left: 0;
+      right: 0;
+      min-width: 200px;
+      background: #ffffff;
+      border: 1.5px solid #d5dded;
+      border-radius: 12px;
+      box-shadow: 0 10px 25px rgba(0, 0, 0, 0.12);
+      z-index: 100;
+      padding: 8px;
+      text-transform: none;
+      letter-spacing: normal;
+    }
+
+    .multiselect-actions {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 2px 6px 6px;
+      border-bottom: 1px solid #f1f5f9;
+      margin-bottom: 4px;
+    }
+
+    .btn-text-action {
+      background: transparent;
+      border: none;
+      color: #004489;
+      font-size: 0.78rem;
+      font-weight: 700;
+      cursor: pointer;
+      padding: 2px 6px;
+      border-radius: 4px;
+    }
+
+    .btn-text-action:hover {
+      background: rgba(0, 68, 137, 0.08);
+    }
+
+    .action-divider {
+      color: #cbd5e1;
+      font-weight: bold;
+    }
+
+    .multiselect-options {
+      display: grid;
+      gap: 2px;
+      max-height: 200px;
+      overflow-y: auto;
+    }
+
+    .multiselect-option {
+      display: flex !important;
+      flex-direction: row !important;
+      align-items: center !important;
+      gap: 8px;
+      padding: 6px 8px;
+      border-radius: 6px;
+      cursor: pointer;
+      font-size: 0.84rem;
+      font-weight: 500;
+      color: #1e293b;
+      text-transform: none !important;
+      letter-spacing: normal !important;
+    }
+
+    .multiselect-option:hover {
+      background: #f8fafc;
+    }
+
+    .multiselect-option input[type="checkbox"] {
+      width: 15px;
+      height: 15px;
+      accent-color: #004489;
+      cursor: pointer;
+      margin: 0;
     }
 
     .clear-filter {
       display: inline-flex;
       align-items: center;
-      justify-content: center;
-      gap: 5px;
+      gap: 6px;
       height: 42px;
       padding: 0 14px;
-      border: 1px solid #d9dce3;
-      border-radius: 9px;
-      background: #fff;
-      color: var(--brand-primary);
-      font-weight: 700;
+      border-radius: 10px;
+      border: 1px solid var(--surface-border);
+      background: #ffffff;
+      font-size: 0.85rem;
+      font-weight: 600;
+      color: #64748b;
       cursor: pointer;
+      transition: all 0.2s;
+      align-self: flex-end;
     }
 
-    .clear-filter:disabled { opacity: 0.42; cursor: default; }
+    .clear-filter:hover:not(:disabled) {
+      color: var(--brand-accent);
+      border-color: var(--brand-accent);
+      background: rgba(106, 0, 255, 0.04);
+    }
+
+    .clear-filter:disabled {
+      opacity: 0.4;
+      cursor: not-allowed;
+    }
 
     .report-status {
       display: flex;
-      align-items: center;
       justify-content: space-between;
-      margin-top: -12px;
-      padding: 0 4px;
+      align-items: center;
+      font-size: 0.85rem;
       color: var(--text-muted);
-      font-size: 0.76rem;
     }
 
     .report-status i {
       display: inline-block;
-      width: 7px;
-      height: 7px;
-      margin-right: 5px;
+      width: 8px;
+      height: 8px;
       border-radius: 50%;
-      background: #28a76f;
-      box-shadow: 0 0 0 3px rgba(40, 167, 111, 0.13);
-    }
-
-    .sales-hero {
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      gap: 20px;
-      padding: 28px;
-      border-radius: 18px;
-      background:
-        linear-gradient(135deg, rgba(106, 0, 255, 0.95), rgba(13, 13, 13, 0.98)),
-        url('https://images.unsplash.com/photo-1514525253161-7a46d19cd819?auto=format&fit=crop&w=1600&q=80');
-      background-size: cover;
-      background-position: center;
-      color: #fff;
-      overflow: hidden;
-    }
-
-    .sales-hero h1 {
-      font-size: clamp(2rem, 4vw, 3.25rem);
-      line-height: 1;
-    }
-
-    .sales-hero p {
-      max-width: 620px;
-      margin: 8px 0 0;
-      color: rgba(255, 255, 255, 0.78);
-    }
-
-    .hero-actions {
-      display: flex;
-      gap: 10px;
-      flex-wrap: wrap;
-      justify-content: flex-end;
+      background: #10b981;
+      margin-right: 6px;
     }
 
     .metric-grid {
       display: grid;
-      grid-template-columns: repeat(4, minmax(0, 1fr));
-      gap: 14px;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 16px;
     }
 
     .metric-card {
-      position: relative;
       display: flex;
-      gap: 14px;
-      min-height: 118px;
+      align-items: center;
+      gap: 16px;
       padding: 20px;
-      border: 1px solid var(--surface-border);
       border-radius: 16px;
-      background: #fff;
-      box-shadow: var(--shadow-soft);
-      overflow: hidden;
-    }
-
-    .metric-card::before {
-      content: '';
-      position: absolute;
-      inset: 0 auto 0 0;
-      width: 4px;
-      background: var(--brand-gradient);
+      background: #ffffff;
+      border: 1px solid var(--surface-border);
+      box-shadow: 0 2px 10px rgba(0, 0, 0, 0.03);
     }
 
     .metric-icon {
-      display: grid;
-      place-items: center;
-      width: 44px;
-      height: 44px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      width: 48px;
+      height: 48px;
       border-radius: 12px;
-      background: rgba(0, 68, 137, 0.1);
-      color: var(--brand-primary);
-      flex: 0 0 auto;
+      background: rgba(106, 0, 255, 0.08);
+      color: var(--brand-accent);
     }
 
-    .metric-card span,
-    .card-head span,
-    .recent-row p,
-    .event-title span {
+    .metric-card span {
+      display: block;
+      font-size: 0.82rem;
       color: var(--text-muted);
-      font-size: 0.85rem;
+      margin-bottom: 2px;
     }
 
     .metric-card strong {
       display: block;
-      margin-top: 6px;
-      font-size: 1.75rem;
-      font-family: 'Eurostile Extended', 'Montserrat', sans-serif;
+      font-size: 1.45rem;
+      font-weight: 800;
     }
 
     .metric-card p {
-      margin: 4px 0 0;
+      margin: 2px 0 0;
+      font-size: 0.78rem;
       color: var(--text-muted);
-      font-size: 0.82rem;
     }
 
     .dashboard-grid {
       display: grid;
-      grid-template-columns: minmax(0, 1.25fr) minmax(320px, 0.75fr);
-      gap: 18px;
-      align-items: start;
+      grid-template-columns: 2fr 1fr;
+      gap: 20px;
     }
 
-    .chart-card,
-    .split-card,
-    .events-card,
-    .recent-card {
-      display: grid;
-      gap: 18px;
+    .dashboard-card {
+      padding: 24px;
+      border-radius: 18px;
+      background: #ffffff;
+      border: 1px solid var(--surface-border);
+      box-shadow: 0 2px 10px rgba(0, 0, 0, 0.03);
     }
 
     .card-head {
       display: flex;
-      align-items: center;
       justify-content: space-between;
-      gap: 12px;
+      align-items: center;
+      margin-bottom: 20px;
+    }
+
+    .card-head h2 {
+      margin: 0;
+      font-size: 1.25rem;
+      font-weight: 700;
+    }
+
+    .card-head .badge {
+      font-size: 0.75rem;
+      font-weight: 700;
+      padding: 4px 10px;
+      border-radius: 999px;
+      background: #f1f5f9;
+      color: var(--text-muted);
     }
 
     .bar-chart.daily {
@@ -548,9 +702,22 @@ interface DashboardFilters {
       grid-template-columns: 130px minmax(0, 1fr) 44px;
       gap: 12px;
       align-items: center;
+      width: 100%;
+      border: 0;
+      background: transparent;
+      text-align: left;
+      font: inherit;
+      color: inherit;
+      cursor: pointer;
+      padding: 6px 8px;
+      border-radius: 10px;
+      transition: background 0.15s;
     }
-    button.payment-row { width:100%;border:0;background:transparent;text-align:left;font:inherit;color:inherit;cursor:pointer; }
-    button.payment-row:hover,button.payment-row.is-selected { background:rgba(106,0,255,.05);border-radius:10px; }
+
+    .payment-row:hover,
+    .payment-row.is-selected {
+      background: rgba(106, 0, 255, 0.06);
+    }
 
     .payment-label span {
       display: block;
@@ -573,29 +740,6 @@ interface DashboardFilters {
       height: 100%;
       border-radius: inherit;
       background: var(--brand-accent);
-    }
-
-    .split-values {
-      display: grid;
-      grid-template-columns: repeat(2, 1fr);
-      gap: 12px;
-    }
-
-    .split-values div {
-      padding: 18px;
-      border-radius: 14px;
-      background: #f8fafc;
-      border: 1px solid var(--surface-border);
-    }
-
-    .split-values span {
-      display: block;
-      color: var(--text-muted);
-      margin-bottom: 8px;
-    }
-
-    .split-values strong {
-      font-size: 1.35rem;
     }
 
     .events-card,
@@ -623,39 +767,19 @@ interface DashboardFilters {
 
     @media (max-width: 1120px) {
       .filter-panel { grid-template-columns: repeat(2, minmax(0, 1fr)); }
-
-      .metric-grid {
-        grid-template-columns: repeat(2, minmax(0, 1fr));
-      }
-
-      .dashboard-grid {
-        grid-template-columns: 1fr;
-      }
+      .metric-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+      .dashboard-grid { grid-template-columns: 1fr; }
     }
 
     @media (max-width: 720px) {
       .filter-panel { grid-template-columns: 1fr; }
-
       .report-status { align-items: flex-start; flex-direction: column; gap: 5px; }
       .sales-hero,
-      .card-head {
-        align-items: flex-start;
-        flex-direction: column;
-      }
-
-      .metric-grid,
-      .split-values {
-        grid-template-columns: 1fr;
-      }
-
-      .bar-chart.daily {
-        grid-template-columns: repeat(4, minmax(42px, 1fr));
-      }
-
+      .card-head { align-items: flex-start; flex-direction: column; }
+      .metric-grid { grid-template-columns: 1fr; }
+      .bar-chart.daily { grid-template-columns: repeat(4, minmax(42px, 1fr)); }
       .payment-row,
-      .event-sales-row {
-        grid-template-columns: 1fr;
-      }
+      .event-sales-row { grid-template-columns: 1fr; }
     }
   `]
 })
@@ -664,15 +788,28 @@ export class OverviewComponent {
   private readonly booking = inject(BookingService);
   private readonly events = inject(EventService);
   private readonly dashboardMetrics = inject(DashboardMetricsService);
+
+  readonly paymentOptions = [
+    { value: 'efectivo', label: 'Efectivo' },
+    { value: 'visalink', label: 'VisaLink' },
+    { value: 'compraclic', label: 'CompraClick' },
+    { value: 'transferencia', label: 'Transferencia' },
+    { value: 'tarjeta', label: 'Tarjeta' },
+    { value: 'cortesia', label: 'Cortesía' },
+  ];
+
+  isPaymentMenuOpen = false;
+
   private readonly filtersSubject = new BehaviorSubject<DashboardFilters>({
     eventId: 'all',
     category: 'all',
     period: 'all',
-    paymentMethod: 'all'
+    paymentMethods: []
   });
 
   readonly user$ = this.auth.user$;
   filters = this.filtersSubject.value;
+
   readonly vm$ = combineLatest([
     this.booking.getReservations(),
     this.events.getEvents(),
@@ -681,23 +818,84 @@ export class OverviewComponent {
     switchMap(([bookings, events, filters]) => {
       const visibleEvents = this.filterEvents(events, filters);
       const dateFrom = this.periodStart(filters.period);
+      const methodsToSend = filters.paymentMethods.length > 0 && filters.paymentMethods.length < this.paymentOptions.length
+        ? filters.paymentMethods
+        : undefined;
+
       return visibleEvents.length
-        ? this.dashboardMetrics.get(visibleEvents.map((event) => event.id), dateFrom,
-            filters.paymentMethod === 'all' ? undefined : filters.paymentMethod).pipe(
+        ? this.dashboardMetrics.get(visibleEvents.map((event) => event.id), dateFrom, methodsToSend).pipe(
             map((response) => this.buildDashboard(bookings, events, filters, response.data))
           )
         : of(this.buildDashboard(bookings, events, filters, null));
     })
   );
 
-  setFilter(field: keyof DashboardFilters, event: Event): void {
+  togglePaymentMenu(event?: MouseEvent): void {
+    if (event) event.stopPropagation();
+    this.isPaymentMenuOpen = !this.isPaymentMenuOpen;
+  }
+
+  @HostListener('document:click')
+  onDocumentClick(): void {
+    this.isPaymentMenuOpen = false;
+  }
+
+  isPaymentSelected(method: string): boolean {
+    return this.filters.paymentMethods.includes(method);
+  }
+
+  togglePaymentMethod(method: string): void {
+    let next: string[];
+    if (this.filters.paymentMethods.includes(method)) {
+      next = this.filters.paymentMethods.filter((m) => m !== method);
+    } else {
+      next = [...this.filters.paymentMethods, method];
+    }
+    this.filters = { ...this.filters, paymentMethods: next };
+    this.filtersSubject.next(this.filters);
+  }
+
+  selectAllPaymentMethods(): void {
+    this.filters = {
+      ...this.filters,
+      paymentMethods: this.paymentOptions.map((o) => o.value)
+    };
+    this.filtersSubject.next(this.filters);
+  }
+
+  clearPaymentMethods(): void {
+    this.filters = {
+      ...this.filters,
+      paymentMethods: []
+    };
+    this.filtersSubject.next(this.filters);
+  }
+
+  get paymentMethodsDisplayText(): string {
+    const selected = this.filters.paymentMethods;
+    if (!selected || selected.length === 0 || selected.length === this.paymentOptions.length) {
+      return 'Todos';
+    }
+    if (selected.length === 1) {
+      const found = this.paymentOptions.find((o) => o.value === selected[0]);
+      return found ? found.label : selected[0];
+    }
+    if (selected.length === 2) {
+      return selected
+        .map((val) => this.paymentOptions.find((o) => o.value === val)?.label ?? val)
+        .join(', ');
+    }
+    return `${selected.length} seleccionados`;
+  }
+
+  setFilter(field: 'eventId' | 'category' | 'period', event: Event): void {
     const value = (event.target as HTMLSelectElement).value;
     this.filters = { ...this.filters, [field]: value } as DashboardFilters;
     this.filtersSubject.next(this.filters);
   }
 
   clearFilters(): void {
-    this.filters = { eventId: 'all', category: 'all', period: 'all', paymentMethod: 'all' };
+    this.filters = { eventId: 'all', category: 'all', period: 'all', paymentMethods: [] };
     this.filtersSubject.next(this.filters);
   }
 
@@ -707,8 +905,7 @@ export class OverviewComponent {
 
   filterByPayment(method?: string): void {
     if (!method || method === 'sin_especificar') return;
-    this.filters = { ...this.filters, paymentMethod: this.filters.paymentMethod === method ? 'all' : method as DashboardFilters['paymentMethod'] };
-    this.filtersSubject.next(this.filters);
+    this.togglePaymentMethod(method);
   }
 
   private buildDashboard(
@@ -719,15 +916,23 @@ export class OverviewComponent {
   ): SalesDashboardVm {
     const allEvents = [...events].sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
     const currentEvents = allEvents.filter((event) => this.isCurrentEvent(event));
-    const hasFilters = filters.eventId !== 'all' || filters.category !== 'all' || filters.period !== 'all' || filters.paymentMethod !== 'all';
+    const hasFilters =
+      filters.eventId !== 'all' ||
+      filters.category !== 'all' ||
+      filters.period !== 'all' ||
+      (filters.paymentMethods.length > 0 && filters.paymentMethods.length < this.paymentOptions.length);
+
     const visibleEvents = (hasFilters ? allEvents : currentEvents).filter((event) =>
       (filters.eventId === 'all' || event.id === filters.eventId) &&
       (filters.category === 'all' || event.category === filters.category)
     );
     const visibleEventIds = new Set(visibleEvents.map((event) => String(event.id)));
     const visibleBookings = bookings.filter((booking) =>
-      visibleEventIds.has(String(booking.eventId)) && this.bookingMatchesPeriod(booking, filters.period) &&
-      (filters.paymentMethod === 'all' || this.paymentMethodKey(booking.paymentMethod) === filters.paymentMethod)
+      visibleEventIds.has(String(booking.eventId)) &&
+      this.bookingMatchesPeriod(booking, filters.period) &&
+      (filters.paymentMethods.length === 0 ||
+        filters.paymentMethods.length === this.paymentOptions.length ||
+        filters.paymentMethods.includes(this.paymentMethodKey(booking.paymentMethod)))
     );
 
     bookings = visibleBookings;
@@ -749,6 +954,7 @@ export class OverviewComponent {
     const calculatedCashRevenue = paidBookings
       .filter((booking) => this.isCashPayment(booking.paymentMethod))
       .reduce((sum, booking) => sum + booking.totals.total, 0);
+
     const totalRevenue = serverMetrics?.total_revenue ?? calculatedRevenue;
     const soldTickets = serverMetrics?.sold_tickets ?? calculatedSoldTickets;
     const availableTickets = serverMetrics?.available_tickets ?? calculatedAvailableTickets;
@@ -896,7 +1102,8 @@ export class OverviewComponent {
         ['visalink', serverMetrics?.visalink_revenue],
         ['compraclic', serverMetrics?.compraclic_revenue],
         ['transferencia', serverMetrics?.transfer_revenue],
-        ['tarjeta', serverMetrics?.card_revenue]
+        ['tarjeta', serverMetrics?.card_revenue],
+        ['cortesia', serverMetrics?.cortesia_revenue]
       ];
       legacyFields.forEach(([method, value]) => {
         if (value !== undefined) databaseValues.set(method, Number(value) || 0);
@@ -905,7 +1112,7 @@ export class OverviewComponent {
       const unclassifiedRevenue = Math.max((Number(serverMetrics?.total_revenue) || 0) - classifiedRevenue, 0);
       if (unclassifiedRevenue > 0) databaseValues.set('sin_especificar', unclassifiedRevenue);
     }
-    const knownMethods = ['efectivo', 'visalink', 'compraclic', 'transferencia', 'tarjeta'];
+    const knownMethods = ['efectivo', 'visalink', 'compraclic', 'transferencia', 'tarjeta', 'cortesia'];
     const methods = [...knownMethods, ...[...databaseValues.keys()].filter((method) => !knownMethods.includes(method))];
     const points = methods.map((method) => ({
       key: method,
@@ -945,17 +1152,18 @@ export class OverviewComponent {
     if (method.includes('visalink')) return 'VisaLink';
     if (method.includes('compraclic')) return 'CompraClick';
     if (method.includes('transferencia')) return 'Transferencia';
+    if (method.includes('cortesia') || method.includes('cortesía')) return 'Cortesía';
     return 'Tarjeta';
   }
 
-  private paymentMethodKey(paymentMethod: string): DashboardFilters['paymentMethod'] | 'sin_especificar' {
+  private paymentMethodKey(paymentMethod: string): string {
     const method = paymentMethod.trim().toLocaleLowerCase('es-GT');
     if (method.includes('efectivo')) return 'efectivo';
     if (method.includes('visalink')) return 'visalink';
     if (method.includes('compraclic')) return 'compraclic';
     if (method.includes('transferencia')) return 'transferencia';
     if (method.includes('cortesia') || method.includes('cortesía')) return 'cortesia';
-    if (method) return 'tarjeta';
+    if (method.includes('tarjeta') || method.includes('card')) return 'tarjeta';
     return 'sin_especificar';
   }
 }
