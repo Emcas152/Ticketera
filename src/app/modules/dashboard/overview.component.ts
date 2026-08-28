@@ -276,8 +276,8 @@ interface DashboardFilters {
               @for (booking of vm.recentBookings; track booking.id) {
                 <article class="recent-row">
                   <div>
-                    <strong>{{ booking.code }}</strong>
-                    <p>{{ booking.eventName }} · {{ booking.customer.name }}</p>
+                    <strong>{{ booking.orderNumber }}</strong>
+                    <p>{{ booking.eventName }} · {{ booking.paymentMethod }}</p>
                   </div>
                   <div>
                     <strong>{{ booking.totals.total | currencyGtq }}</strong>

@@ -13,6 +13,10 @@ export class NotificationService {
     this.open(message, 'info-toast');
   }
 
+  warning(message: string): void {
+    this.open(message, 'warning-toast');
+  }
+
   error(message: string): void {
     this.open(message, 'error-toast');
   }

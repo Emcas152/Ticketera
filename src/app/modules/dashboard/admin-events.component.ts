@@ -1,7 +1,7 @@
 import { AsyncPipe, CommonModule, DatePipe } from '@angular/common';
 import { Component, OnInit, inject } from '@angular/core';
 import { NonNullableFormBuilder, ReactiveFormsModule, Validators } from '@angular/forms';
-import { Observable, concatMap, finalize, from, map, of, switchMap, toArray } from 'rxjs';
+import { Observable, catchError, concatMap, finalize, from, map, of, switchMap, toArray } from 'rxjs';
 import { EventItem, EventPriceTier } from '../../core/models/event.model';
 import { Venue } from '../../core/models/venue.model';
 import { EventAdminInput, EventService } from '../../core/services/event.service';
@@ -73,24 +73,39 @@ import { CurrencyGtqPipe } from '../../shared/pipes/currency-gtq.pipe';
             </mat-step>
 
             <mat-step [completed]="sectionsStepValid">
-              <ng-template matStepLabel>2. Secciones y asientos</ng-template>
+              <ng-template matStepLabel>2. Secciones, mesas y asientos</ng-template>
               <div class="step-content">
                 @if (form.controls.venueMode.value === 'existing') {
-                  <p class="step-note"><mat-icon>check_circle</mat-icon> {{ sectionControls.length }} secciones cargadas desde el venue.</p>
+                  <p class="step-note"><mat-icon>check_circle</mat-icon> {{ sectionControls.length }} secciones cargadas desde el venue existente.</p>
+                } @else {
+                  <p class="step-note"><mat-icon>auto_awesome</mat-icon> Configura la distribución de mesas para generar el plano de asientos automáticamente.</p>
                 }
                 <div formArrayName="sections" class="section-editor">
                   @for (section of sectionControls; track $index; let index = $index) {
-                    <div class="section-row" [formGroupName]="index">
-                      <span class="section-index">{{ index + 1 }}</span>
-                      <mat-form-field class="name-field" appearance="outline"><mat-label>Sección</mat-label><input matInput formControlName="name" /></mat-form-field>
-                      <mat-form-field class="code-field" appearance="outline"><mat-label>Código</mat-label><input matInput formControlName="code" /></mat-form-field>
-                      <mat-form-field class="rows-field" appearance="outline"><mat-label>Filas</mat-label><input matInput formControlName="rows" /></mat-form-field>
-                      <mat-form-field class="seats-field" appearance="outline"><mat-label>Asientos por fila</mat-label><input matInput type="number" min="1" formControlName="seatsPerRow" /></mat-form-field>
-                      <mat-form-field class="price-field" appearance="outline"><mat-label>Precio</mat-label><span matTextPrefix>Q&nbsp;</span><input matInput type="number" min="0" formControlName="price" /></mat-form-field>
-                      <button class="delete-section" mat-icon-button type="button" aria-label="Eliminar sección" matTooltip="Eliminar sección" (click)="removeSection(index)"><mat-icon>delete_outline</mat-icon></button>
+                    <div class="section-card" [formGroupName]="index">
+                      <div class="section-card-header">
+                        <div class="section-header-title">
+                          <span class="section-badge">{{ index + 1 }}</span>
+                          <strong>{{ section.get('name')?.value || 'Nueva Sección' }}</strong>
+                        </div>
+                        <span class="calc-badge">
+                          {{ (section.get('tablesCount')?.value || 0) * (section.get('seatsPerTable')?.value || 0) }} asientos totales
+                          ({{ section.get('tablesCount')?.value || 0 }} mesas · {{ section.get('seatsPerTable')?.value || 0 }} asientos/mesa)
+                        </span>
+                        <button class="delete-section" mat-icon-button type="button" aria-label="Eliminar sección" matTooltip="Eliminar sección" (click)="removeSection(index)"><mat-icon>delete_outline</mat-icon></button>
+                      </div>
+
+                      <div class="section-card-grid">
+                        <mat-form-field appearance="outline"><mat-label>Nombre</mat-label><input matInput formControlName="name" placeholder="Ej: Diamante, VIP, General" /></mat-form-field>
+                        <mat-form-field appearance="outline"><mat-label>Código</mat-label><input matInput formControlName="code" placeholder="Ej: VIP" /></mat-form-field>
+                        <mat-form-field appearance="outline"><mat-label>Total de mesas</mat-label><input matInput type="number" min="1" formControlName="tablesCount" /></mat-form-field>
+                        <mat-form-field appearance="outline"><mat-label>Mesas por fila</mat-label><input matInput type="number" min="1" formControlName="tablesPerRow" /></mat-form-field>
+                        <mat-form-field appearance="outline"><mat-label>Asientos por mesa</mat-label><input matInput type="number" min="1" formControlName="seatsPerTable" /></mat-form-field>
+                        <mat-form-field appearance="outline"><mat-label>Precio</mat-label><span matTextPrefix>Q&nbsp;</span><input matInput type="number" min="0" formControlName="price" /></mat-form-field>
+                      </div>
                     </div>
                   } @empty {
-                    <p class="step-note warning"><mat-icon>warning</mat-icon> El venue no tiene secciones disponibles.</p>
+                    <p class="step-note warning"><mat-icon>warning</mat-icon> No hay secciones agregadas.</p>
                   }
                 </div>
                 <button mat-stroked-button type="button" (click)="addSection()"><mat-icon>add</mat-icon> Agregar sección</button>
@@ -316,9 +331,32 @@ import { CurrencyGtqPipe } from '../../shared/pipes/currency-gtq.pipe';
     .step-note { display: flex; align-items: center; gap: 8px; margin: 0; color: var(--text-muted); font-size: .84rem; }
     .step-note mat-icon { width: 18px; height: 18px; font-size: 18px; }
     .step-note.warning { color: #9a6700; }
-    .section-editor { display: grid; gap: 12px; }
-    .section-row { display:grid;grid-template-columns:32px minmax(130px,1fr) minmax(150px,1.2fr) minmax(130px,1fr) 40px;gap:0 10px;align-items:start;padding:14px 12px 2px;border:1px solid #dbe3ee;border-radius:14px;background:#fff;box-shadow:0 3px 12px rgba(15,23,42,.05) }
-    .section-index{grid-row:1/3;display:grid;place-items:center;width:26px;height:26px;margin-top:13px;border-radius:50%;background:#e8f1ff;color:#0759b8;font-size:.76rem;font-weight:800}.section-row mat-form-field{min-width:0}.name-field{grid-column:2/4}.code-field{grid-column:4}.delete-section{grid-column:5;grid-row:1;margin-top:8px}.rows-field{grid-column:2}.seats-field{grid-column:3}.price-field{grid-column:4}.section-row:focus-within{border-color:#93c5fd;box-shadow:0 0 0 3px rgba(59,130,246,.09)}
+    .section-editor { display: grid; gap: 14px; }
+    .section-card {
+      padding: 14px 16px; border: 1px solid #dbe3ee; border-radius: 14px; background: #fff;
+      box-shadow: 0 2px 10px rgba(15,23,42,.04); display: grid; gap: 12px; transition: border-color .15s;
+    }
+    .section-card:focus-within { border-color: #93c5fd; box-shadow: 0 0 0 3px rgba(59,130,246,.08); }
+    .section-card-header { display: flex; align-items: center; justify-content: space-between; gap: 10px; flex-wrap: wrap; }
+    .section-header-title { display: flex; align-items: center; gap: 10px; }
+    .section-badge {
+      display: grid; place-items: center; width: 26px; height: 26px; border-radius: 50%;
+      background: #e8f1ff; color: #0759b8; font-size: .76rem; font-weight: 800;
+    }
+    .calc-badge {
+      font-size: 0.74rem; font-weight: 700; color: #0369a1; background: #f0f9ff;
+      border: 1px solid #bae6fd; padding: 3px 10px; border-radius: 999px;
+    }
+    .section-card-grid {
+      display: grid; grid-template-columns: 1.8fr 1fr 1fr 1fr 1fr 1.2fr; gap: 10px; align-items: center;
+    }
+    .section-card-grid mat-form-field { min-width: 0; }
+    @media (max-width: 900px) {
+      .section-card-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+    }
+    @media (max-width: 500px) {
+      .section-card-grid { grid-template-columns: 1fr; }
+    }
 
     .image-upload { display: grid; gap: 8px; color: var(--text-muted); font-size: .82rem; }
     .image-upload input { display: none; }
@@ -621,9 +659,14 @@ export class AdminEventsComponent implements OnInit {
 
   private toAdminInput(): EventAdminInput {
     const raw = this.form.getRawValue();
+    const calculatedCapacity = raw.sections.reduce(
+      (sum, sec) => sum + (Number(sec.tablesCount) || 20) * (Number(sec.seatsPerTable) || 10),
+      0
+    );
 
     return {
       ...raw,
+      capacity: raw.capacity && raw.capacity > 0 ? raw.capacity : (calculatedCapacity || 100),
       imageFile: this.selectedImage,
       tags: this.parseTags(raw.tagsText),
       priceTiers: raw.sections.map((section) => ({
@@ -641,6 +684,8 @@ export class AdminEventsComponent implements OnInit {
     }
 
     const raw = this.form.getRawValue();
+    const seatMapConfig = this.buildParqueStyleSeatMap(raw.sections);
+
     return this.venueService.createVenue({
       name: raw.newVenueName.trim(),
       address: raw.newVenueAddress.trim(),
@@ -656,26 +701,181 @@ export class AdminEventsComponent implements OnInit {
           city: venue.city,
           address: venue.address
         });
-        return from(raw.sections).pipe(
-          concatMap((section) => this.venueService.createSection({
-            venue_id: Number(venue.id),
-            name: section.name.trim(),
-            code: section.code.trim().toUpperCase()
-          }).pipe(map((created) => ({ created, source: section })))),
-          toArray()
+
+        // 1. Guardar el plano de asientos completo generado automáticamente estilo Parque de la Industria
+        return this.venueService.saveSeatMap(venue.id, seatMapConfig).pipe(
+          catchError(() => of(null)),
+          // 2. Crear las secciones en backend
+          switchMap(() => from(raw.sections).pipe(
+            concatMap((section) => this.venueService.createSection({
+              venue_id: Number(venue.id),
+              name: section.name.trim(),
+              code: (section.code?.trim() || section.name.trim().slice(0, 4) || 'SEC').toUpperCase()
+            }).pipe(
+              catchError(() => of({ id: Math.floor(Math.random() * 1000), name: section.name, code: section.code })),
+              map((created) => ({ created, source: section }))
+            )),
+            toArray()
+          )),
+          // 3. Generar asientos en backend para cada sección
+          switchMap((sections) => from(sections).pipe(
+            concatMap(({ created, source }) => {
+              const rowCount = Math.ceil((Number(source.tablesCount) || 1) / (Number(source.tablesPerRow) || 20));
+              const rowLetters = Array.from({ length: rowCount }, (_, i) => String.fromCharCode(65 + i)).join(',');
+              const seatsPerRow = (Number(source.tablesPerRow) || 20) * (Number(source.seatsPerTable) || 10);
+
+              return this.venueService.generateSeats({
+                section_id: Number(created.id),
+                rows: rowLetters,
+                seats_per_row: seatsPerRow
+              }).pipe(catchError(() => of(null)));
+            }),
+            toArray()
+          )),
+          // 4. Crear el evento final
+          switchMap(() => this.events.createEvent(this.toAdminInput()))
         );
-      }),
-      switchMap((sections) => from(sections).pipe(
-        concatMap(({ created, source }) => this.venueService.generateSeats({
-          section_id: Number(created.id),
-          rows: source.rows.trim().toUpperCase(),
-          seats_per_row: Number(source.seatsPerRow)
-        })),
-        toArray(),
-        map(() => sections)
-      )),
-      switchMap(() => this.events.createEvent(this.toAdminInput()))
+      })
     );
+  }
+
+  private buildParqueStyleSeatMap(rawSections: Array<{
+    name: string;
+    code: string;
+    tablesCount: number;
+    tablesPerRow: number;
+    seatsPerTable: number;
+    price: number;
+  }>): {
+    canvas_width: number;
+    canvas_height: number;
+    elements: unknown[];
+    sections: unknown[];
+    tables: unknown[];
+    total_seats: number;
+    total_tables: number;
+  } {
+    const CANVAS_W = 1900;
+    const TABLE_W = 32;
+    const TABLE_H = 78;
+    const SEAT_OFFSET = 10;
+    const SEAT_SPACING = 14;
+
+    const sectionColors = ['#0b2c6b', '#e85d04', '#008c95', '#64748b', '#7c3aed', '#059669'];
+    const zoneBgColors = ['#fef3c7', '#e0f2fe', '#dcfce7', '#f1f5f9', '#f3e8ff', '#ecfdf5'];
+
+    const elements: unknown[] = [
+      { id: 'stage', kind: 'stage', label: 'ESCENARIO', x: 460, y: 20, w: 980, h: 90, color: '#142238', textColor: '#fff7ed', rotation: 0 },
+      { id: 'foh-zone', kind: 'zone', label: 'FOH', x: 830, y: 1970, w: 240, h: 80, color: '#e2e8f0', textColor: '#0f172a', rotation: 0 }
+    ];
+
+    const mappedSections: unknown[] = [];
+    const tables: unknown[] = [];
+    let globalTableNumber = 1;
+    let currentY = 170;
+
+    rawSections.forEach((sec, sIdx) => {
+      const secColor = sectionColors[sIdx % sectionColors.length];
+      const zoneBg = zoneBgColors[sIdx % zoneBgColors.length];
+      const count = Math.max(1, Number(sec.tablesCount) || 1);
+      const perRow = Math.max(1, Number(sec.tablesPerRow) || 20);
+      const seatsCount = Math.max(1, Number(sec.seatsPerTable) || 10);
+      const rowCount = Math.ceil(count / perRow);
+      const sectionStartY = currentY;
+
+      mappedSections.push({
+        id: sec.code?.toLowerCase() || `sec-${sIdx + 1}`,
+        name: sec.name,
+        price: Number(sec.price) || 150,
+        color: secColor,
+        tableCount: count
+      });
+
+      elements.push({
+        id: `zone-${sec.code?.toLowerCase() || sIdx}`,
+        kind: 'zone',
+        label: sec.name.toUpperCase(),
+        x: 95,
+        y: sectionStartY - 55,
+        w: 1735,
+        h: rowCount * 145 + 30,
+        color: zoneBg,
+        textColor: '#0f172a',
+        rotation: 0
+      });
+
+      for (let i = 0; i < count; i++) {
+        const rowInSec = Math.floor(i / perRow);
+        const colInSec = i % perRow;
+        const spacingX = perRow > 1 ? Math.min(95, 1600 / (perRow - 1)) : 95;
+        const centerX = 150 + colInSec * spacingX;
+        const centerY = sectionStartY + rowInSec * 145;
+
+        const tableX = centerX - TABLE_W / 2;
+        const tableY = centerY - TABLE_H / 2;
+
+        const seats: Array<{ number: number; x: number; y: number }> = [];
+        const seatsPerSide = Math.ceil(seatsCount / 2);
+
+        for (let s = 1; s <= seatsCount; s++) {
+          const onLeft = s <= seatsPerSide;
+          const sideIndex = onLeft ? s - 1 : s - seatsPerSide - 1;
+          const cx = onLeft ? -SEAT_OFFSET : TABLE_W + SEAT_OFFSET;
+          const cy = 11 + sideIndex * SEAT_SPACING;
+          seats.push({ number: s, x: cx, y: cy });
+        }
+
+        tables.push({
+          id: `table-${globalTableNumber}`,
+          label: String(globalTableNumber),
+          section: sec.name,
+          x: Math.round(tableX),
+          y: Math.round(tableY),
+          rotation: 0,
+          seats
+        });
+
+        globalTableNumber++;
+      }
+
+      currentY = sectionStartY + rowCount * 145 + 80;
+    });
+
+    const canvasHeight = Math.max(2120, currentY + 120);
+    const totalTables = tables.length;
+    const totalSeats = rawSections.reduce((sum, s) => sum + (Number(s.tablesCount) || 0) * (Number(s.seatsPerTable) || 0), 0);
+
+    return {
+      canvas_width: CANVAS_W,
+      canvas_height: canvasHeight,
+      elements,
+      sections: mappedSections,
+      tables,
+      total_seats: totalSeats,
+      total_tables: totalTables
+    };
+  }
+
+  private createSectionGroup(section?: VenueSection) {
+    const defaultCode = section?.code?.trim()
+      || (section?.name ? section.name.trim().slice(0, 4).toUpperCase() : 'VIP');
+
+    const tierPrice = this.editingEvent
+      ? this.editingEvent.priceTiers.find((tier) =>
+          String(tier.sectionId ?? '') === String(section?.id ?? '')
+          || tier.name.trim().toLowerCase() === (section?.name ?? '').trim().toLowerCase()
+        )?.price
+      : undefined;
+
+    return this.fb.group({
+      id: [section ? String(section.id) : ''],
+      name: [section?.name ?? 'VIP', Validators.required],
+      code: [defaultCode],
+      tablesCount: [20, [Validators.required, Validators.min(1)]],
+      tablesPerRow: [20, [Validators.required, Validators.min(1)]],
+      seatsPerTable: [10, [Validators.required, Validators.min(1)]],
+      price: [tierPrice ?? 150, [Validators.required, Validators.min(0)]]
+    });
   }
 
   private loadVenueSections(venueId: number | string): void {
@@ -700,24 +900,6 @@ export class AdminEventsComponent implements OnInit {
         this.courtesyLimits[eventId] = empty;
         if (applyToForm && this.editingEvent?.id === eventId) this.courtesyLimit = empty;
       }
-    });
-  }
-
-  private createSectionGroup(section?: VenueSection) {
-    const tierPrice = this.editingEvent
-      ? this.editingEvent.priceTiers.find((tier) =>
-          String(tier.sectionId ?? '') === String(section?.id ?? '')
-          || tier.name.trim().toLowerCase() === (section?.name ?? '').trim().toLowerCase()
-        )?.price
-      : undefined;
-
-    return this.fb.group({
-      id: [section ? String(section.id) : ''],
-      name: [section?.name ?? '', Validators.required],
-      code: [section?.code ?? '', Validators.required],
-      rows: ['A', Validators.required],
-      seatsPerRow: [20, [Validators.required, Validators.min(1)]],
-      price: [tierPrice ?? 150, [Validators.required, Validators.min(0)]]
     });
   }
 

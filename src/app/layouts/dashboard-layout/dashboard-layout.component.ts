@@ -98,6 +98,14 @@ import { MATERIAL_IMPORTS } from '../../shared/material/material-imports';
               <mat-icon>table_restaurant</mat-icon>
               <span class="nav-text">Mapa de Asientos</span>
             </a>
+            <a routerLink="/dashboard/mesas-bloqueadas" routerLinkActive="is-active" [title]="collapsed() ? 'Bloqueo de Mesas' : ''">
+              <mat-icon>block</mat-icon>
+              <span class="nav-text">Bloqueo de Mesas</span>
+            </a>
+            <a routerLink="/dashboard/configuracion" routerLinkActive="is-active" [title]="collapsed() ? 'Configuración' : ''">
+              <mat-icon>settings</mat-icon>
+              <span class="nav-text">Configuración</span>
+            </a>
           </nav>
         </div>
         }

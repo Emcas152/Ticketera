@@ -14,7 +14,14 @@ export const errorInterceptor: HttpInterceptorFn = (req: HttpRequest<unknown>, n
         auth.handleUnauthorized();
       }
 
-      errors.handleHttpError(error);
+      const courtesyLimitNotConfigured = req.method === 'GET'
+        && req.url.includes('/courtesy-limits/') && error.status === 404;
+      const body = req.body as { payment_method?: unknown } | null;
+      const isCourtesyRequest = req.url.includes('/tickets/courtesy')
+        || (req.url.includes('/bookings') && body?.payment_method === 'cortesia');
+      if (!courtesyLimitNotConfigured) {
+        errors.handleHttpError(error, isCourtesyRequest ? 'courtesy' : 'general');
+      }
       return throwError(() => error);
     })
   );

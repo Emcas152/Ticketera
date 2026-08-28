@@ -124,10 +124,10 @@ import { CurrencyGtqPipe } from '../../shared/pipes/currency-gtq.pipe';
             }
 
             @for (table of map.tables; track table.id) {
-              <g class="table" [class.table-selectable]="courtesyMode" [class.table-selected]="isTableSelected(table)"
+              <g class="table" [class.table-selectable]="courtesyMode && !table.disabled" [class.table-selected]="isTableSelected(table)"
                 [attr.transform]="'translate(' + table.x + ' ' + table.y + ') rotate(' + (table.rotation || 0) + ' ' + table.width / 2 + ' ' + table.height / 2 + ')'"
                 (click)="selectTable(table, $event)">
-                <rect [attr.width]="table.width" [attr.height]="table.height" rx="7" [ngClass]="tableClass(table.sectionName)" />
+                <rect [attr.width]="table.width" [attr.height]="table.height" rx="7" [ngClass]="tableClass(table.sectionName, table)" />
                 <text [attr.x]="table.width / 2" [attr.y]="table.height / 2" text-anchor="middle" dominant-baseline="middle">{{ table.label }}</text>
               </g>
             }
@@ -167,10 +167,10 @@ import { CurrencyGtqPipe } from '../../shared/pipes/currency-gtq.pipe';
     .legend{display:flex;align-items:center;gap:6px;margin-top:10px;color:var(--text-muted);font-size:.76rem}.legend i{width:12px;height:12px;border-radius:50%;background:#22c55e}.legend i.selected{background:#7c3aed}.legend i.reserved{background:#f59e0b}.legend i.sold{background:#ef4444}
     .section-chips{display:flex;flex-wrap:wrap;gap:8px;margin-top:14px}.chip{display:inline-flex;align-items:center;gap:8px;padding:7px 16px;border-radius:20px;cursor:pointer;background:#f8fafc;border:1.5px solid #cbd5e1;color:#334155;font-size:.82rem;font-weight:700}.chip:hover,.chip.active{border-color:#7c3aed;background:#f3e8ff;color:#5b21b6}.chip-dot{width:10px;height:10px;border-radius:50%}
     .venue-viewport{position:relative;margin:16px auto 0;height:min(78vh,900px);aspect-ratio:1900/2120;max-width:100%;overflow:hidden;border:1px solid #d8dee8;border-radius:12px;background:#a8a8a8;cursor:grab;touch-action:none;user-select:none}.venue-map{display:block;width:100%;height:100%;background:#a8a8a8}.venue-viewport:active{cursor:grabbing}
-    .stage rect{fill:#111827}.stage text,.stage-label{fill:#fff7ed;font-weight:900;font-size:34px}.table rect{stroke:rgba(255,255,255,.58);stroke-width:1.5;filter:drop-shadow(0 3px 6px rgba(0,0,0,.22))}.table text{fill:#fff;font-size:11px;font-weight:800;pointer-events:none}.table-selectable{cursor:pointer}.table-selectable:hover rect{stroke:#ffe066;stroke-width:3}.table-selected rect{stroke:#ffe066;stroke-width:4;filter:drop-shadow(0 0 10px #ffe066)}.table-diamante{fill:#0b2c6b}.table-vip{fill:#e85d04}.table-general{fill:#008c95}
+    .stage rect{fill:#111827}.stage text,.stage-label{fill:#fff7ed;font-weight:900;font-size:34px}.table rect{stroke:rgba(255,255,255,.58);stroke-width:1.5;filter:drop-shadow(0 3px 6px rgba(0,0,0,.22))}.table text{fill:#fff;font-size:11px;font-weight:800;pointer-events:none}.table-selectable{cursor:pointer}.table-selectable:hover rect{stroke:#ffe066;stroke-width:3}.table-selected rect{stroke:#ffe066;stroke-width:4;filter:drop-shadow(0 0 10px #ffe066)}.table-diamante{fill:#0b2c6b}.table-vip{fill:#e85d04}.table-general{fill:#008c95}.table-disabled{fill:#ef4444 !important;stroke:#b91c1c !important;filter:drop-shadow(0 0 6px rgba(239,68,68,.8)) !important}
     .map-zone{fill:rgba(69,255,25,.04);stroke-width:2.5;stroke-dasharray:12 8}.zone-diamante{fill:rgba(9,31,73,.07);stroke:rgba(9,31,73,.72)}.zone-vip{fill:rgba(204,82,0,.06);stroke:rgba(204,82,0,.68)}.zone-general{fill:rgba(0,128,128,.06);stroke:rgba(0,128,128,.68)}.zone-default{stroke:rgba(69,255,25,.42)}.zone-label{fill:#fff;stroke-width:8;paint-order:stroke;font-size:27px;font-weight:900;letter-spacing:.11em}.label-diamante{stroke:#091f49}.label-vip{stroke:#c94e00}.label-general{stroke:#007b82}.label-default{stroke:#1e293b}.row-marker circle{fill:#0f172a;stroke:rgba(255,255,255,.78);stroke-width:1.5}.row-marker text{fill:#fff;font-size:11px;font-weight:800}.entry-label,.bathroom-title{font-weight:900}.entry-label{font-size:42px;fill:#020617}.bathroom-title{font-size:30px;fill:#fff}.bathroom-icon{font-size:44px;font-weight:900;fill:#fff}
     .seat{cursor:pointer;outline:none}.seat circle{stroke:rgba(255,255,255,.24);stroke-width:1;transition:.15s}.seat.seat-diamante circle{fill:#091f49}.seat.seat-vip circle{fill:#e06000}.seat.seat-general circle{fill:#008080}.seat text{fill:#fff;font-size:8px;font-weight:800;pointer-events:none}.seat:hover circle,.seat:focus circle{filter:brightness(1.15);stroke:#fff;stroke-width:2.5}
-    .seat.selected circle{fill:#ffe066;stroke:#111827;stroke-width:2}.seat.selected text{fill:#111827}.seat.reserved text,.seat.sold text{fill:white}.seat.reserved,.seat.sold{cursor:not-allowed}.seat.reserved circle{fill:#f59e0b;stroke:#92400e}.seat.sold circle{fill:#ef4444;stroke:#991b1b}.seat.validating{pointer-events:none;opacity:.55}.seat.inactive,.table.inactive{opacity:.25}.seat.selected{opacity:1}
+    .seat.selected circle{fill:#ffe066;stroke:#111827;stroke-width:2}.seat.selected text{fill:#111827}.seat.reserved text,.seat.sold text{fill:white}.seat.reserved,.seat.sold{cursor:not-allowed !important;pointer-events:none !important}.seat.reserved circle{fill:#f59e0b;stroke:#92400e}.seat.sold circle{fill:#ef4444;stroke:#991b1b}.seat.validating{pointer-events:none;opacity:.55}.seat.inactive,.table.inactive{opacity:.25}.seat.selected{opacity:1}
     .map-controls-bar{position:absolute;bottom:16px;right:16px;z-index:20;display:flex;border-radius:6px;overflow:hidden;background:#18181b;box-shadow:0 4px 12px rgba(0,0,0,.35)}.control-btn{height:36px;border:0;background:#18181b;color:#fff;font-weight:700;cursor:pointer}.control-btn:hover{background:#27272a}.center-btn{padding:0 16px;font-size:12px;text-transform:uppercase;letter-spacing:.14em;border-right:1px solid rgba(255,255,255,.15)}.zoom-icon-btn{width:36px;font-size:18px;border-right:1px solid rgba(255,255,255,.15)}
     .selection-strip{display:flex;justify-content:space-between;gap:14px;margin-top:12px;padding:12px 14px;border:1px solid #ddd6fe;border-radius:10px;background:#f5f3ff;color:#4c1d95;font-size:.82rem}.selection-strip span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
     .live-status{display:flex;align-items:center;gap:6px;color:#166534;font-size:.78rem;font-weight:700}.live-status i{width:8px;height:8px;border-radius:50%;background:#22c55e;box-shadow:0 0 0 4px rgba(34,197,94,.16)}
@@ -407,7 +407,11 @@ export class CashSalesComponent implements OnInit {
 
   elementTransform(element: LayoutElement): string { return `translate(${element.x} ${element.y}) rotate(${element.rotation || 0} ${element.w / 2} ${element.h / 2})`; }
   entryArrowPath(width: number, height: number): string { return `M0 ${height / 2} L${width * .42} 0 L${width * .42} ${height * .32} L${width} ${height * .32} L${width} ${height * .68} L${width * .42} ${height * .68} L${width * .42} ${height} Z`; }
-  tableClass(section: string): string { const name = section.toLowerCase(); return name.includes('diamante') ? 'table-diamante' : name.includes('vip') ? 'table-vip' : 'table-general'; }
+  tableClass(section: string, table?: SeatTable): string {
+    if (table?.disabled) return 'table-disabled';
+    const name = section.toLowerCase();
+    return name.includes('diamante') ? 'table-diamante' : name.includes('vip') ? 'table-vip' : 'table-general';
+  }
   seatSectionClass(seat: Seat): string { const name = seat.section.toLowerCase(); return name.includes('diamante') ? 'seat-diamante' : name.includes('vip') ? 'seat-vip' : 'seat-general'; }
   zoneClass(label: string): string { const name = label.toLowerCase(); return name.includes('diamante') ? 'zone-diamante' : name.includes('vip') ? 'zone-vip' : name.includes('general') ? 'zone-general' : 'zone-default'; }
   zoneLabelClass(label: string): string { return this.zoneClass(label).replace('zone-', 'label-'); }
@@ -435,7 +439,7 @@ export class CashSalesComponent implements OnInit {
   }
 
   selectTable(table: SeatTable, event: Event): void {
-    if (!this.courtesyMode) return;
+    if (!this.courtesyMode || table.disabled) return;
     event.stopPropagation();
     const selectable = table.seats.filter((seat) => this.isAvailable(seat));
     if (selectable.length === 0) {
@@ -465,7 +469,12 @@ export class CashSalesComponent implements OnInit {
       }
     });
   }
+
   toggleSeat(seat: Seat): void {
+    if (seat.status === 'sold' || seat.status === 'reserved') {
+      this.notifications.info(`El asiento ${seat.number ?? seat.label} ya está vendido o reservado.`);
+      return;
+    }
     if (this.isSelected(seat)) {
       this.selectedSeats = this.selectedSeats.filter((item) => item.id !== seat.id);
       return;

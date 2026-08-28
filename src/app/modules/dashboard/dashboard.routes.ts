@@ -12,6 +12,8 @@ import { CashSalesComponent } from './cash-sales.component';
 import { VenuesComponent } from './venues.component';
 import { ReservationsComponent } from './reservations.component';
 import { CourtesySeatsComponent } from './courtesy-seats.component';
+import { SystemSettingsComponent } from './system-settings.component';
+import { DisabledTablesComponent } from './disabled-tables.component';
 
 export const routes: Routes = [
   {
@@ -25,9 +27,11 @@ export const routes: Routes = [
       { path: 'ventas-efectivo', component: CashSalesComponent, canActivate: [adminRoleGuard] },
       { path: 'cortesias', component: CourtesySeatsComponent, canActivate: [adminRoleGuard] },
       { path: 'reservas', component: ReservationsComponent, canActivate: [adminRoleGuard] },
+      { path: 'mesas-bloqueadas', component: DisabledTablesComponent, canActivate: [adminRoleGuard] },
       { path: 'validar', component: AccessValidatorComponent, canActivate: [authorizerRoleGuard] },
       { path: 'tickets', component: TicketsComponent, canActivate: [adminRoleGuard] },
       { path: 'profile', component: ProfileComponent, canActivate: [adminRoleGuard] },
+      { path: 'configuracion', component: SystemSettingsComponent, canActivate: [adminRoleGuard] },
       { path: 'seat-map-builder', component: SeatMapBuilderComponent, canActivate: [adminRoleGuard] }
     ]
   }

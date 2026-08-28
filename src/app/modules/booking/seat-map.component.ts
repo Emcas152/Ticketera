@@ -125,7 +125,7 @@ import { MATERIAL_IMPORTS } from '../../shared/material/material-imports';
                 <g *ngFor="let table of seatMap.tables">
                   <rect
                     class="table-plate map-table"
-                    [ngClass]="getTableClass(table.sectionName)"
+                    [ngClass]="getTableClass(table.sectionName, table)"
                     [class.inactive]="activeSectionId && activeSectionId !== table.sectionId"
                     [attr.x]="table.x"
                     [attr.y]="table.y"
@@ -231,6 +231,7 @@ import { MATERIAL_IMPORTS } from '../../shared/material/material-imports';
     .map-table-vip{fill:#e85d04}
     .map-table-general{fill:#008c95}
     .map-table-default{fill:#008c95}
+    .map-table-disabled{fill:#ef4444 !important;stroke:#b91c1c !important;filter:drop-shadow(0 0 6px rgba(239,68,68,.8)) !important}
     .map-table-label{fill:#ffffff;font-size:11px;font-weight:800;font-family:sans-serif}
 
     /* Row Marker */
@@ -244,7 +245,7 @@ import { MATERIAL_IMPORTS } from '../../shared/material/material-imports';
     .seat-fill-diamante{fill:#091f49;stroke:rgba(255,255,255,.24);stroke-width:1}
     .seat-fill-vip{fill:#e06000;stroke:rgba(255,255,255,.24);stroke-width:1}
     .seat-fill-general{fill:#008080;stroke:rgba(255,255,255,.24);stroke-width:1}
-    .seat-fill-reserved,.seat-fill-sold{fill:#9a1c28;stroke:rgba(255,255,255,.22);stroke-width:1}
+    .seat-fill-reserved,.seat-fill-sold{fill:#9a1c28;stroke:rgba(255,255,255,.22);stroke-width:1;cursor:not-allowed !important;pointer-events:none !important}
     .seat-fill-selected{fill:#ffe066;stroke:#111827;stroke-width:2;filter:drop-shadow(0 4px 10px rgba(0,0,0,.4))}
 
     /* Floating Controls */
@@ -316,7 +317,8 @@ export class SeatMapComponent {
     return 'section-label-default';
   }
 
-  getTableClass(sectionName: string): string {
+  getTableClass(sectionName: string, table?: SeatTable): string {
+    if (table?.disabled) return 'map-table-disabled';
     const name = (sectionName || '').toLowerCase();
     if (name.includes('diamante')) return 'map-table-diamante';
     if (name.includes('vip')) return 'map-table-vip';
@@ -401,7 +403,10 @@ export class SeatMapComponent {
 
   openSeatCard(seat: Seat, event: Event): void {
     event.stopPropagation();
-    if (!this.selectedSeatIds.has(seat.id) && (seat.status !== 'available' || seat.sectionId === 'occupied')) return;
+    if (seat.status === 'sold' || seat.status === 'reserved' || seat.sectionId === 'occupied') {
+      return;
+    }
+    if (!this.selectedSeatIds.has(seat.id) && seat.status !== 'available') return;
     this.booking.toggleSeat(seat);
     this.activeSectionId = seat.sectionId;
   }

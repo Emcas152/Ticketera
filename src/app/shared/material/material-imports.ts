@@ -12,6 +12,7 @@ import { MatProgressBarModule } from '@angular/material/progress-bar';
 import { MatProgressSpinnerModule } from '@angular/material/progress-spinner';
 import { MatSelectModule } from '@angular/material/select';
 import { MatSidenavModule } from '@angular/material/sidenav';
+import { MatSlideToggleModule } from '@angular/material/slide-toggle';
 import { MatStepperModule } from '@angular/material/stepper';
 import { MatSnackBarModule } from '@angular/material/snack-bar';
 import { MatTableModule } from '@angular/material/table';
@@ -33,6 +34,7 @@ export const MATERIAL_IMPORTS = [
   MatProgressSpinnerModule,
   MatSelectModule,
   MatSidenavModule,
+  MatSlideToggleModule,
   MatStepperModule,
   MatSnackBarModule,
   MatTableModule,

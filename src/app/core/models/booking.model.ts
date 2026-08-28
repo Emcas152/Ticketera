@@ -24,6 +24,8 @@ export interface PaymentResult {
 export interface BookingRecord {
   id: string;
   orderNumber: string;
+  code?: string;
+  customer?: { name?: string; email?: string; phone?: string };
   eventId: string;
   eventName: string;
   eventImage?: string | null;

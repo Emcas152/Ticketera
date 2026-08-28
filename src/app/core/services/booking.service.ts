@@ -11,6 +11,8 @@ import { NotificationService } from './notification.service';
 import { StorageService } from './storage.service';
 import { createSecureTicketQr, parseSecureTicketQr } from '../utils/secure-ticket-qr';
 
+import { TableManagementService } from './table-management.service';
+
 interface BookingCartState {
   eventId: string | null;
   seats: Seat[];
@@ -36,6 +38,7 @@ export class BookingService {
   private readonly api = inject(ApiService);
   private readonly storage = inject(StorageService);
   private readonly notifications = inject(NotificationService);
+  private readonly tableManagement = inject(TableManagementService);
   private readonly cartKey = 'pulse-booking-cart';
   private readonly historyKey = 'pulse-booking-history';
   private readonly currentBookingKey = 'pulse-current-booking';
@@ -696,17 +699,33 @@ export class BookingService {
     const cart = this.cartSubject.value;
     const selectedIds = new Set(cart.eventId === seatMap.eventId ? cart.seats.map((seat) => seat.id) : []);
     const soldIds = new Set(this.storage.getItem<string[]>(this.soldSeatsKey, []));
+    const disabledTableLabels = new Set(this.tableManagement.getDisabledTables(seatMap.eventId));
 
     return {
       ...seatMap,
       sections: seatMap.sections.map((section) => ({
         ...section,
-        seats: section.seats.map((seat) => this.applySeatStatus(seatMap.eventId, seat, selectedIds, soldIds))
+        seats: section.seats.map((seat) => {
+          const isTableDisabled = seat.tableLabel ? disabledTableLabels.has(String(seat.tableLabel).trim()) : false;
+          if (isTableDisabled) {
+            return { ...seat, status: 'sold' };
+          }
+          return this.applySeatStatus(seatMap.eventId, seat, selectedIds, soldIds);
+        })
       })),
-      tables: seatMap.tables.map((table) => ({
-        ...table,
-        seats: table.seats.map((seat) => this.applySeatStatus(seatMap.eventId, seat, selectedIds, soldIds))
-      }))
+      tables: seatMap.tables.map((table) => {
+        const isTableDisabled = disabledTableLabels.has(String(table.label).trim());
+        return {
+          ...table,
+          disabled: isTableDisabled,
+          seats: table.seats.map((seat) => {
+            if (isTableDisabled) {
+              return { ...seat, status: 'sold' };
+            }
+            return this.applySeatStatus(seatMap.eventId, seat, selectedIds, soldIds);
+          })
+        };
+      })
     };
   }
 
@@ -765,7 +784,17 @@ export class BookingService {
     const validApiSections = apiSections.filter((sec) => sec.seats && sec.seats.length > 0);
     const targetSections = validApiSections.length > 0 ? validApiSections : apiSections;
 
-    const allApiSeats: LaravelSeat[] = targetSections.flatMap((s) => s.seats);
+    // Attach section information to each seat from parent section if not set
+    targetSections.forEach((section) => {
+      const parentName = section.section || 'General';
+      const parentId = section.section_id != null ? String(section.section_id) : '';
+      (section.seats || []).forEach((seat) => {
+        if (!seat.section) seat.section = parentName;
+        if (seat.section_id == null && parentId) seat.section_id = parentId;
+      });
+    });
+
+    const allApiSeats: LaravelSeat[] = targetSections.flatMap((s) => s.seats || []);
     const sectionNamesById = new Map<string, string>();
     targetSections.forEach((section) => {
       if (section.section_id != null && section.section) {
@@ -784,10 +813,26 @@ export class BookingService {
       tableGroupMap.set(tNum, list);
     });
 
+    const getTableSectionName = (tableNumber: number, firstSeat?: LaravelSeat): string => {
+      // Direct table numbering mapping for Parque de la Industria standard (220 tables)
+      if (tableNumber > 0 && tableNumber <= 100) return 'Diamante';
+      if (tableNumber > 100 && tableNumber <= 180) return 'VIP';
+      if (tableNumber > 180 && tableNumber <= 220) return 'General';
+
+      const explicit = firstSeat?.section
+        || (firstSeat?.section_id != null ? sectionNamesById.get(String(firstSeat.section_id)) : undefined);
+
+      if (explicit && explicit.trim()) {
+        return explicit.trim();
+      }
+
+      return 'General';
+    };
+
     const sections: SeatSection[] = targetSections.map((apiSection) => {
       const sectionName = apiSection.section || 'General';
       const sectionId = this.slugify(sectionName);
-      const mappedSeats = apiSection.seats.map((seat, seatIndex) =>
+      const mappedSeats = (apiSection.seats || []).map((seat, seatIndex) =>
         this.mapLaravelSeat(seat, sectionId, sectionName, 0, seatIndex)
       );
       const prices = mappedSeats.map((seat) => seat.price);
@@ -804,13 +849,14 @@ export class BookingService {
       };
     });
 
+    const disabledTableLabels = new Set(this.tableManagement.getDisabledTables(eventId));
+
     const tables: SeatTable[] = Array.from(tableGroupMap.entries()).map(([tableNumber, apiTableSeats]) => {
       const first = apiTableSeats[0];
-      const sectionName = first?.section
-        || (first?.section_id != null ? sectionNamesById.get(String(first.section_id)) : undefined)
-        || 'General';
+      const sectionName = getTableSectionName(tableNumber, first);
       const sectionId = this.slugify(sectionName);
       const position = calculateTablePosition(tableNumber, sectionName);
+      const isTableDisabled = disabledTableLabels.has(String(tableNumber).trim());
 
       const tableSeats = apiTableSeats.map((s, idx) => {
         const sNum = this.tableSeatNumber(s, idx + 1);
@@ -818,6 +864,9 @@ export class BookingService {
         const mapped = this.mapLaravelSeat(s, sectionId, sectionName, 0, idx);
         return {
           ...mapped,
+          section: sectionName,
+          sectionId,
+          status: isTableDisabled ? ('sold' as const) : mapped.status,
           tableId: `table-${tableNumber}`,
           tableLabel: String(tableNumber),
           x: position.x + localPos.cx,
@@ -834,6 +883,7 @@ export class BookingService {
         y: position.y,
         width: 32,
         height: 78,
+        disabled: isTableDisabled,
         seats: tableSeats
       };
     });

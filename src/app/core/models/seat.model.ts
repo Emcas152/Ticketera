@@ -28,6 +28,7 @@ export interface SeatTable {
   height: number;
   rotation?: number;
   seats: Seat[];
+  disabled?: boolean;
 }
 
 export interface SeatSection {
