@@ -4,6 +4,7 @@ import { StorageService } from './storage.service';
 import { NotificationService } from './notification.service';
 
 const STORAGE_PREFIX = 'pulse-disabled-tables:';
+export const DEFAULT_DISABLED_TABLES: string[] = ['161', '162', '163', '164', '165', '176', '177', '178', '179', '180'];
 
 @Injectable({ providedIn: 'root' })
 export class TableManagementService {
@@ -19,13 +20,14 @@ export class TableManagementService {
    * Obtiene la lista de identificadores/labels de mesas deshabilitadas para un evento.
    */
   getDisabledTables(eventId: string): string[] {
-    if (!eventId) return [];
+    if (!eventId) return [...DEFAULT_DISABLED_TABLES];
     const cached = this.stateSubject.value[eventId];
     if (cached) return cached;
 
-    const stored = this.storage.getItem<string[]>(`${STORAGE_PREFIX}${eventId}`, []);
-    this.updateEventCache(eventId, stored);
-    return stored;
+    const stored = this.storage.getItem<string[] | null>(`${STORAGE_PREFIX}${eventId}`, null);
+    const result = stored !== null ? stored : [...DEFAULT_DISABLED_TABLES];
+    this.updateEventCache(eventId, result);
+    return result;
   }
 
   /**
