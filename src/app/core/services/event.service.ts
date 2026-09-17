@@ -1,5 +1,5 @@
 import { inject, Injectable } from '@angular/core';
-import { BehaviorSubject, Observable, delay, map, of, switchMap, tap } from 'rxjs';
+import { BehaviorSubject, Observable, EMPTY, delay, expand, map, of, reduce, switchMap, tap } from 'rxjs';
 import { environment } from '../../../environments/environment';
 import { MOCK_EVENTS } from '../mocks/mock-data';
 import { EventFilters, EventItem, EventPriceTier } from '../models/event.model';
@@ -41,15 +41,35 @@ export class EventService {
     );
   }
 
+  getAdminEvents(): Observable<EventItem[]> {
+    if (environment.useMocks) return this.events$;
+    const page = (number: number) => this.api.getRaw<LaravelEventListResponse>('/admin/events', {
+      per_page: 100, page: number
+    });
+    return page(1).pipe(
+      expand((response) => {
+        const pagination = response.meta ?? response.pagination;
+        return pagination && pagination.current_page < pagination.last_page
+          ? page(pagination.current_page + 1) : EMPTY;
+      }),
+      map((response) => this.extractLaravelEvents(response).map((event) => this.mapLaravelEvent(event))),
+      reduce((all, events) => [...all, ...events], [] as EventItem[])
+    );
+  }
+
+  isHistorical(event: EventItem, now = Date.now()): boolean {
+    return Boolean(event.archived || event.expired || new Date(event.endsAt ?? event.date).getTime() < now);
+  }
+
   getFeaturedEvents(): Observable<EventItem[]> {
     if (environment.useMocks) {
       return this.events$.pipe(
-        map((events) => events.filter((event) => event.featured || event.status !== 'draft')),
+        map((events) => events.filter((event) => !event.archived && (event.featured || event.status !== 'draft'))),
         delay(150)
       );
     }
 
-    return this.getEvents().pipe(map((events) => events.filter((event) => event.featured || event.status !== 'draft')));
+    return this.getEvents().pipe(map((events) => events.filter((event) => !event.archived && (event.featured || event.status !== 'draft'))));
   }
 
   getEventById(eventId: string): Observable<EventItem | undefined> {
@@ -110,7 +130,7 @@ export class EventService {
     );
   }
 
-  deleteEvent(eventId: string): Observable<void> {
+  archiveEvent(eventId: string): Observable<void> {
     if (!environment.useMocks) {
       return this.api.delete<null>(`/events/${eventId}`).pipe(
         tap(() => this.eventsSubject.next(this.eventsSubject.value.filter((event) => event.id !== eventId))),
@@ -120,7 +140,7 @@ export class EventService {
 
     return of(undefined).pipe(
       delay(200),
-      tap(() => this.persistEvents(this.eventsSubject.value.filter((event) => event.id !== eventId)))
+      tap(() => this.persistEvents(this.eventsSubject.value.map((event) => event.id === eventId ? { ...event, archived: true } : event)))
     );
   }
 
@@ -223,11 +243,13 @@ export class EventService {
         if (sections.length === 0) return of(event);
 
         const prices = new Map(input.priceTiers.map((tier) => [this.normalizeName(tier.name), tier.price]));
+        const fees = new Map(input.priceTiers.map((tier) => [this.normalizeName(tier.name), tier.serviceFee ?? 0]));
         const payload = {
           event_id: Number(event.id),
           sections: sections.map((section) => ({
             section_id: Number(section.id),
-            price: prices.get(this.normalizeName(section.name)) ?? input.basePrice
+            price: prices.get(this.normalizeName(section.name)) ?? input.basePrice,
+            service_fee: fees.get(this.normalizeName(section.name)) ?? 0
           }))
         };
 
@@ -236,7 +258,8 @@ export class EventService {
           price_tiers: sections.map((section) => ({
             section_id: section.id,
             name: section.name,
-            price: prices.get(this.normalizeName(section.name)) ?? input.basePrice
+            price: prices.get(this.normalizeName(section.name)) ?? input.basePrice,
+            service_fee: fees.get(this.normalizeName(section.name)) ?? 0
           }))
         })));
       })
@@ -266,6 +289,9 @@ export class EventService {
     return {
       id: String(event.id),
       venueId: venue?.id,
+      archived: event.status === 'eliminado',
+      expired: event.status === 'expirado',
+      endsAt: this.normalizeApiDate(event.ends_at) ?? undefined,
       slug: this.slugify(event.title),
       name: event.title,
       category: event.category ?? 'general',
@@ -294,6 +320,7 @@ export class EventService {
             sectionId: tier.section_id,
             name: tier.name,
             price: Number(tier.price),
+            serviceFee: Number(tier.service_fee ?? 0),
             description: `Sector ${tier.name}.`,
             availability: 'available' as const
           }))
@@ -346,6 +373,7 @@ export class EventService {
       return {
         name: section.name,
         price,
+        serviceFee: 0,
         description: `Sector ${section.name}.`,
         availability: 'available' as const
       };
@@ -366,7 +394,7 @@ export class EventService {
 
   private defaultPriceTiers(basePrice: number): EventPriceTier[] {
     return [
-      { name: 'General', price: basePrice, description: 'Acceso general.', availability: 'available' }
+      { name: 'General', price: basePrice, serviceFee: 0, description: 'Acceso general.', availability: 'available' }
     ];
   }
 
@@ -392,7 +420,7 @@ export class EventService {
         (filters.priceRange === 'premium' && event.basePrice > 200);
       const dateMatch = this.matchDate(event.date, filters.datePreset);
 
-      return searchMatch && categoryMatch && cityMatch && priceMatch && dateMatch;
+      return !event.archived && searchMatch && categoryMatch && cityMatch && priceMatch && dateMatch;
     });
   }
 
@@ -442,6 +470,7 @@ export interface EventAdminInput {
 }
 
 interface LaravelEventListResponse {
+  meta?: { current_page: number; last_page: number };
   data?: LaravelEvent[];
   items?: LaravelEvent[];
   pagination?: {
@@ -463,6 +492,7 @@ interface LaravelEvent {
     section_id: number | string;
     name: string;
     price: number | string;
+    service_fee?: number | string;
   }>;
   capacity?: number | string | null;
   status: 'borrador' | 'publicado' | 'eliminado' | 'expirado';

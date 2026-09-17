@@ -129,6 +129,12 @@ import { CurrencyGtqPipe } from '../../shared/pipes/currency-gtq.pipe';
                 (click)="selectTable(table, $event)">
                 <rect [attr.width]="table.width" [attr.height]="table.height" rx="7" [ngClass]="tableClass(table.sectionName, table)" />
                 <text [attr.x]="table.width / 2" [attr.y]="table.height / 2" text-anchor="middle" dominant-baseline="middle">{{ table.label }}</text>
+                @if (isRowStart(table.label, table)) {
+                  <g class="row-marker" [attr.transform]="'translate(-62 ' + (table.height / 2) + ')'" pointer-events="none">
+                    <circle r="15" />
+                    <text text-anchor="middle" dominant-baseline="middle" y="1">{{ rowNumber(table.label, table) }}</text>
+                  </g>
+                }
               </g>
             }
 
@@ -415,8 +421,17 @@ export class CashSalesComponent implements OnInit {
   seatSectionClass(seat: Seat): string { const name = seat.section.toLowerCase(); return name.includes('diamante') ? 'seat-diamante' : name.includes('vip') ? 'seat-vip' : 'seat-general'; }
   zoneClass(label: string): string { const name = label.toLowerCase(); return name.includes('diamante') ? 'zone-diamante' : name.includes('vip') ? 'zone-vip' : name.includes('general') ? 'zone-general' : 'zone-default'; }
   zoneLabelClass(label: string): string { return this.zoneClass(label).replace('zone-', 'label-'); }
-  isRowStart(label: string): boolean { const value = Number(label); return Number.isFinite(value) && (value - 1) % 10 === 0; }
-  rowNumber(label: string): number { return Math.floor((Number(label) - 1) / 10) + 1; }
+  isRowStart(label: string, table?: SeatTable | { x?: number; isRowStart?: boolean }): boolean {
+    if (table?.isRowStart !== undefined) return Boolean(table.isRowStart);
+    if (table?.x !== undefined && table.x <= 155) return true;
+    const value = Number(label);
+    return Number.isFinite(value) && value > 0 && (value - 1) % 20 === 0;
+  }
+  rowNumber(label: string, table?: SeatTable | { rowNumber?: number }): number {
+    if (table?.rowNumber !== undefined) return table.rowNumber;
+    const value = Number(label);
+    return Number.isFinite(value) && value > 0 ? Math.floor((value - 1) / 20) + 1 : 1;
+  }
   sectionId(name: string): string { return name.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, ''); }
   sectionColor(sectionName: string): string {
     const configuredSections = (this.venueMapConfig?.sections ?? []) as ConfiguredSection[];

@@ -1,3 +1,4 @@
+import { EventHistoryComponent } from './event-history.component';
 import { Routes } from '@angular/router';
 import { authGuard } from '../../core/guards/auth.guard';
 import { adminRoleGuard, authorizerRoleGuard } from '../../core/guards/role.guard';
@@ -22,6 +23,7 @@ export const routes: Routes = [
     canActivate: [authGuard],
     children: [
       { path: '', component: OverviewComponent, canActivate: [adminRoleGuard] },
+      { path: 'eventos-anteriores', component: EventHistoryComponent, canActivate: [adminRoleGuard] },
       { path: 'eventos', component: AdminEventsComponent, canActivate: [adminRoleGuard] },
       { path: 'venues', component: VenuesComponent, canActivate: [adminRoleGuard] },
       { path: 'ventas-efectivo', component: CashSalesComponent, canActivate: [adminRoleGuard] },

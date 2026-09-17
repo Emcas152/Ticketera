@@ -7,6 +7,7 @@ import { Venue } from '../../core/models/venue.model';
 import { EventAdminInput, EventService } from '../../core/services/event.service';
 import { CourtesyLimit, CourtesyLimitService } from '../../core/services/courtesy-limit.service';
 import { VenueSection, VenueService } from '../../core/services/venue.service';
+import { NotificationService } from '../../core/services/notification.service';
 import { MATERIAL_IMPORTS } from '../../shared/material/material-imports';
 import { CurrencyGtqPipe } from '../../shared/pipes/currency-gtq.pipe';
 
@@ -68,47 +69,64 @@ import { CurrencyGtqPipe } from '../../shared/pipes/currency-gtq.pipe';
                     <mat-form-field appearance="outline"><mat-label>País</mat-label><input matInput maxlength="2" formControlName="newVenueCountry" /></mat-form-field>
                   </div>
                 }
-                <div class="step-actions"><button mat-flat-button type="button" matStepperNext [disabled]="!venueStepValid">Continuar</button></div>
+                <div class="step-actions"><button mat-flat-button type="button" matStepperNext [disabled]="!venueStepValid" (click)="onVenueStepNext()">Continuar</button></div>
               </div>
             </mat-step>
 
             <mat-step [completed]="sectionsStepValid">
-              <ng-template matStepLabel>2. Secciones, mesas y asientos</ng-template>
+              <ng-template matStepLabel>2. Secciones y asientos</ng-template>
               <div class="step-content">
                 @if (form.controls.venueMode.value === 'existing') {
                   <p class="step-note"><mat-icon>check_circle</mat-icon> {{ sectionControls.length }} secciones cargadas desde el venue existente.</p>
                 } @else {
-                  <p class="step-note"><mat-icon>auto_awesome</mat-icon> Configura la distribución de mesas para generar el plano de asientos automáticamente.</p>
+                  <p class="step-note"><mat-icon>auto_awesome</mat-icon> Configura las filas y mesas por fila para autogenerar el plano de mesas y localidades.</p>
                 }
                 <div formArrayName="sections" class="section-editor">
-                  @for (section of sectionControls; track $index; let index = $index) {
+                  @for (section of sectionControls; track section; let index = $index) {
                     <div class="section-card" [formGroupName]="index">
-                      <div class="section-card-header">
-                        <div class="section-header-title">
-                          <span class="section-badge">{{ index + 1 }}</span>
-                          <strong>{{ section.get('name')?.value || 'Nueva Sección' }}</strong>
-                        </div>
-                        <span class="calc-badge">
-                          {{ (section.get('tablesCount')?.value || 0) * (section.get('seatsPerTable')?.value || 0) }} asientos totales
-                          ({{ section.get('tablesCount')?.value || 0 }} mesas · {{ section.get('seatsPerTable')?.value || 0 }} asientos/mesa)
-                        </span>
-                        <button class="delete-section" mat-icon-button type="button" aria-label="Eliminar sección" matTooltip="Eliminar sección" (click)="removeSection(index)"><mat-icon>delete_outline</mat-icon></button>
+                      <div class="section-card-top">
+                        <span class="section-badge">{{ index + 1 }}</span>
+                        <mat-form-field appearance="outline" class="field-name">
+                          <mat-label>Sección*</mat-label>
+                          <input matInput formControlName="name" placeholder="general" />
+                        </mat-form-field>
+                        <mat-form-field appearance="outline" class="field-code">
+                          <mat-label>Código</mat-label>
+                          <input matInput formControlName="code" placeholder="G" />
+                        </mat-form-field>
+                        <button class="delete-section" mat-icon-button type="button" aria-label="Eliminar sección" matTooltip="Eliminar sección" (click)="removeSection(index)">
+                          <mat-icon>delete_outline</mat-icon>
+                        </button>
                       </div>
 
-                      <div class="section-card-grid">
-                        <mat-form-field appearance="outline"><mat-label>Nombre</mat-label><input matInput formControlName="name" placeholder="Ej: Diamante, VIP, General" /></mat-form-field>
-                        <mat-form-field appearance="outline"><mat-label>Código</mat-label><input matInput formControlName="code" placeholder="Ej: VIP" /></mat-form-field>
-                        <mat-form-field appearance="outline"><mat-label>Total de mesas</mat-label><input matInput type="number" min="1" formControlName="tablesCount" /></mat-form-field>
-                        <mat-form-field appearance="outline"><mat-label>Mesas por fila</mat-label><input matInput type="number" min="1" formControlName="tablesPerRow" /></mat-form-field>
-                        <mat-form-field appearance="outline"><mat-label>Asientos por mesa</mat-label><input matInput type="number" min="1" formControlName="seatsPerTable" /></mat-form-field>
-                        <mat-form-field appearance="outline"><mat-label>Precio</mat-label><span matTextPrefix>Q&nbsp;</span><input matInput type="number" min="0" formControlName="price" /></mat-form-field>
+                      <div class="section-card-bottom">
+                        <mat-form-field appearance="outline">
+                          <mat-label>Filas*</mat-label>
+                          <input matInput formControlName="rows" placeholder="A o 5" />
+                        </mat-form-field>
+                        <mat-form-field appearance="outline">
+                          <mat-label>Mesas por fila*</mat-label>
+                          <input matInput type="number" min="1" formControlName="seatsPerRow" placeholder="20" />
+                        </mat-form-field>
+                        <mat-form-field appearance="outline">
+                          <mat-label>Precio*</mat-label>
+                          <span matTextPrefix>Q&nbsp;</span>
+                          <input matInput type="number" min="0" formControlName="price" placeholder="100" />
+                        </mat-form-field>
+                        <mat-form-field appearance="outline">
+                          <mat-label>Fee servicio</mat-label>
+                          <span matTextPrefix>Q&nbsp;</span>
+                          <input matInput type="number" min="0" formControlName="serviceFee" placeholder="0" />
+                        </mat-form-field>
                       </div>
                     </div>
                   } @empty {
                     <p class="step-note warning"><mat-icon>warning</mat-icon> No hay secciones agregadas.</p>
                   }
                 </div>
-                <button mat-stroked-button type="button" (click)="addSection()"><mat-icon>add</mat-icon> Agregar sección</button>
+                <button class="btn-add-section" mat-stroked-button type="button" (click)="addSection()">
+                  <mat-icon>add</mat-icon> Agregar sección
+                </button>
                 <div class="step-actions"><button mat-button type="button" matStepperPrevious>Atrás</button><button mat-flat-button type="button" matStepperNext [disabled]="!sectionsStepValid">Continuar</button></div>
               </div>
             </mat-step>
@@ -264,8 +282,8 @@ import { CurrencyGtqPipe } from '../../shared/pipes/currency-gtq.pipe';
                 <button mat-icon-button type="button" matTooltip="Publicar" (click)="publishEvent(event)" [disabled]="event.status === 'on-sale'">
                   <mat-icon>campaign</mat-icon>
                 </button>
-                <button mat-icon-button type="button" matTooltip="Eliminar" (click)="deleteEvent(event)">
-                  <mat-icon>delete_outline</mat-icon>
+                <button mat-icon-button type="button" matTooltip="Archivar y conservar ventas" (click)="archiveEvent(event)">
+                  <mat-icon>archive</mat-icon>
                 </button>
               </div>
             </div>
@@ -337,25 +355,34 @@ import { CurrencyGtqPipe } from '../../shared/pipes/currency-gtq.pipe';
       box-shadow: 0 2px 10px rgba(15,23,42,.04); display: grid; gap: 12px; transition: border-color .15s;
     }
     .section-card:focus-within { border-color: #93c5fd; box-shadow: 0 0 0 3px rgba(59,130,246,.08); }
-    .section-card-header { display: flex; align-items: center; justify-content: space-between; gap: 10px; flex-wrap: wrap; }
-    .section-header-title { display: flex; align-items: center; gap: 10px; }
+    .section-card-top {
+      display: grid; grid-template-columns: 28px 1fr 120px 40px; gap: 10px; align-items: center;
+    }
+    .section-card-top .field-name { min-width: 0; }
+    .section-card-top .field-code { min-width: 0; }
     .section-badge {
-      display: grid; place-items: center; width: 26px; height: 26px; border-radius: 50%;
-      background: #e8f1ff; color: #0759b8; font-size: .76rem; font-weight: 800;
+      display: grid; place-items: center; width: 28px; height: 28px; border-radius: 50%;
+      background: #e8f1ff; color: #0759b8; font-size: .82rem; font-weight: 800;
     }
-    .calc-badge {
-      font-size: 0.74rem; font-weight: 700; color: #0369a1; background: #f0f9ff;
-      border: 1px solid #bae6fd; padding: 3px 10px; border-radius: 999px;
+    .delete-section { color: #ef4444; }
+    .section-card-bottom {
+      display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 10px; align-items: center;
     }
-    .section-card-grid {
-      display: grid; grid-template-columns: 1.8fr 1fr 1fr 1fr 1fr 1.2fr; gap: 10px; align-items: center;
+    .btn-add-section {
+      width: 100%; border-style: dashed !important; border-radius: 12px !important;
+      padding: 10px !important; color: #0284c7 !important; border-color: #7dd3fc !important;
+      display: flex; align-items: center; justify-content: center; gap: 6px; font-weight: 600;
     }
-    .section-card-grid mat-form-field { min-width: 0; }
-    @media (max-width: 900px) {
-      .section-card-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+    .btn-add-section:hover {
+      background: #f0f9ff !important;
     }
-    @media (max-width: 500px) {
-      .section-card-grid { grid-template-columns: 1fr; }
+    @media (max-width: 650px) {
+      .section-card-top { grid-template-columns: 28px 1fr 40px; }
+      .section-card-top .field-code { grid-column: 1 / -1; }
+      .section-card-bottom { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+    }
+    @media (max-width: 440px) {
+      .section-card-bottom { grid-template-columns: 1fr; }
     }
 
     .image-upload { display: grid; gap: 8px; color: var(--text-muted); font-size: .82rem; }
@@ -422,8 +449,9 @@ export class AdminEventsComponent implements OnInit {
   private readonly events = inject(EventService);
   private readonly venueService = inject(VenueService);
   private readonly courtesyLimitsService = inject(CourtesyLimitService);
+  private readonly notifications = inject(NotificationService);
 
-  readonly events$: Observable<EventItem[]> = this.events.events$;
+  readonly events$: Observable<EventItem[]> = this.events.events$.pipe(map((events) => events.filter((event) => !event.archived)));
   editingEvent: EventItem | null = null;
   venues: Venue[] = [];
   readonly categories = [
@@ -454,7 +482,7 @@ export class AdminEventsComponent implements OnInit {
     time: ['19:00', Validators.required],
     location: ['', Validators.required],
     venueId: [''],
-    venueName: ['', Validators.required],
+    venueName: [''],
     address: ['', Validators.required],
     description: ['', Validators.required],
     basePrice: [150, [Validators.required, Validators.min(0)]],
@@ -494,7 +522,7 @@ export class AdminEventsComponent implements OnInit {
     this.events.getEvents().subscribe((events) => events.forEach((event) => this.loadCourtesyLimit(event.id)));
     this.venueService.getVenues(true).subscribe((venues) => {
       this.venues = venues;
-      if (!this.form.controls.venueId.value && venues.length > 0) {
+      if (this.form.controls.venueMode.value === 'existing' && !this.form.controls.venueId.value && venues.length > 0) {
         this.form.patchValue({ venueId: venues[0].id.toString() });
         this.onVenueSelectionChange();
       }
@@ -502,11 +530,32 @@ export class AdminEventsComponent implements OnInit {
   }
 
   saveEvent(): void {
+    if (this.form.controls.venueMode.value === 'new') {
+      const newName = this.form.controls.newVenueName.value.trim();
+      const newAddr = this.form.controls.newVenueAddress.value.trim();
+      const newCity = this.form.controls.newVenueCity.value.trim();
+      this.form.patchValue({
+        venueName: newName,
+        location: this.form.controls.location.value.trim() || newName,
+        address: this.form.controls.address.value.trim() || newAddr,
+        city: this.form.controls.city.value.trim() || newCity || 'Guatemala City'
+      });
+    }
+
     if (this.courtesyLimit && this.form.controls.courtesyLimit.value < this.courtesyLimit.used) {
       this.form.controls.courtesyLimit.setErrors({ belowUsed: true });
     }
     if (this.form.invalid || !this.venueStepValid || !this.sectionsStepValid || (!this.editingEvent && !this.selectedImage)) {
       this.form.markAllAsTouched();
+      if (!this.venueStepValid) {
+        this.notifications.warning('Por favor completa todos los datos obligatorios del venue / ubicación.');
+      } else if (!this.sectionsStepValid) {
+        this.notifications.warning('Configura al menos una sección válida con sus mesas.');
+      } else if (!this.editingEvent && !this.selectedImage) {
+        this.notifications.warning('Debes seleccionar una imagen para el evento.');
+      } else {
+        this.notifications.warning('Por favor completa los campos requeridos del evento.');
+      }
       return;
     }
 
@@ -518,7 +567,23 @@ export class AdminEventsComponent implements OnInit {
     request$.pipe(
       switchMap((event) => this.courtesyLimitsService.save(event.id, this.form.controls.courtesyLimit.value, this.courtesyLimit?.id).pipe(map(() => event))),
       finalize(() => this.saving = false)
-    ).subscribe(() => this.resetForm());
+    ).subscribe({
+      next: () => {
+        this.notifications.success(
+          this.editingEvent
+            ? 'Evento actualizado correctamente.'
+            : (this.form.controls.venueMode.value === 'new'
+                ? 'Venue y evento creados exitosamente.'
+                : 'Evento creado exitosamente.')
+        );
+        this.resetForm();
+      },
+      error: (error) => {
+        console.error('Error al guardar evento:', error);
+        const message = error?.error?.message || error?.message || 'Error al procesar la creación del evento o recinto.';
+        this.notifications.error(message);
+      }
+    });
   }
 
   editEvent(event: EventItem): void {
@@ -558,8 +623,9 @@ export class AdminEventsComponent implements OnInit {
     this.events.publishEvent(event.id).subscribe();
   }
 
-  deleteEvent(event: EventItem): void {
-    this.events.deleteEvent(event.id).subscribe(() => {
+  archiveEvent(event: EventItem): void {
+    this.events.archiveEvent(event.id).subscribe(() => {
+      this.notifications.success('Evento archivado. Puedes consultar sus ventas en Eventos anteriores.');
       if (this.editingEvent?.id === event.id) {
         this.resetForm();
       }
@@ -618,13 +684,36 @@ export class AdminEventsComponent implements OnInit {
   onVenueModeChange(): void {
     this.form.controls.sections.clear();
     if (this.form.controls.venueMode.value === 'new') {
-      this.form.patchValue({ venueId: '', venueName: '', location: '', address: '' });
+      const currentNewName = this.form.controls.newVenueName.value.trim();
+      const currentNewAddr = this.form.controls.newVenueAddress.value.trim();
+      const currentNewCity = this.form.controls.newVenueCity.value.trim() || 'Guatemala City';
+      this.form.patchValue({
+        venueId: '',
+        venueName: currentNewName,
+        location: currentNewName,
+        address: currentNewAddr,
+        city: currentNewCity
+      });
       this.addSection();
       return;
     }
     if (this.venues.length > 0) {
       this.form.controls.venueId.setValue(String(this.venues[0].id));
       this.onVenueSelectionChange();
+    }
+  }
+
+  onVenueStepNext(): void {
+    if (this.form.controls.venueMode.value === 'new') {
+      const newName = this.form.controls.newVenueName.value.trim();
+      const newAddr = this.form.controls.newVenueAddress.value.trim();
+      const newCity = this.form.controls.newVenueCity.value.trim();
+      this.form.patchValue({
+        venueName: newName,
+        location: this.form.controls.location.value.trim() || newName,
+        address: this.form.controls.address.value.trim() || newAddr,
+        city: this.form.controls.city.value.trim() || newCity || 'Guatemala City'
+      });
     }
   }
 
@@ -660,7 +749,11 @@ export class AdminEventsComponent implements OnInit {
   private toAdminInput(): EventAdminInput {
     const raw = this.form.getRawValue();
     const calculatedCapacity = raw.sections.reduce(
-      (sum, sec) => sum + (Number(sec.tablesCount) || 20) * (Number(sec.seatsPerTable) || 10),
+      (sum, sec) => {
+        const rowCount = this.parseRowCount(sec.rows);
+        const tablesPerRow = Math.max(1, Number(sec.seatsPerRow) || 20);
+        return sum + (rowCount * tablesPerRow * 10);
+      },
       0
     );
 
@@ -672,6 +765,7 @@ export class AdminEventsComponent implements OnInit {
       priceTiers: raw.sections.map((section) => ({
         name: section.name,
         price: Number(section.price),
+        serviceFee: Number(section.serviceFee || 0),
         description: `Localidad ${section.name}.`,
         availability: 'available' as const
       }))
@@ -694,6 +788,10 @@ export class AdminEventsComponent implements OnInit {
       status: 'active'
     }).pipe(
       switchMap((venue) => {
+        if (!this.venues.some((v) => String(v.id) === String(venue.id))) {
+          this.venues = [venue, ...this.venues];
+        }
+
         this.form.patchValue({
           venueId: String(venue.id),
           venueName: venue.name,
@@ -702,33 +800,67 @@ export class AdminEventsComponent implements OnInit {
           address: venue.address
         });
 
-        // 1. Guardar el plano de asientos completo generado automáticamente estilo Parque de la Industria
-        return this.venueService.saveSeatMap(venue.id, seatMapConfig).pipe(
-          catchError(() => of(null)),
-          // 2. Crear las secciones en backend
+        // Crear las localidades antes de guardar el plano con sus identificadores reales.
+        return of(null).pipe(
           switchMap(() => from(raw.sections).pipe(
-            concatMap((section) => this.venueService.createSection({
-              venue_id: Number(venue.id),
-              name: section.name.trim(),
-              code: (section.code?.trim() || section.name.trim().slice(0, 4) || 'SEC').toUpperCase()
-            }).pipe(
-              catchError(() => of({ id: Math.floor(Math.random() * 1000), name: section.name, code: section.code })),
-              map((created) => ({ created, source: section }))
-            )),
+            concatMap((section, index) => {
+              const baseCode = (section.code?.trim() || section.name.trim().slice(0, 4) || 'SEC')
+                .toUpperCase()
+                .replace(/[^A-Z0-9]/g, '');
+              const uniqueCode = `V${venue.id}_${baseCode || 'SEC'}_${index + 1}`.slice(0, 48);
+
+              return this.venueService.createSection({
+                venue_id: Number(venue.id),
+                name: section.name.trim(),
+                code: uniqueCode
+              }).pipe(
+                catchError((err) => {
+                  console.error('Error al crear sección:', err);
+                  return of({ id: Math.floor(Math.random() * 1000), name: section.name, code: uniqueCode });
+                }),
+                map((created) => ({ created, source: section }))
+              );
+            }),
             toArray()
           )),
+          switchMap((sections) => {
+            const sectionIds = new Map(sections.map(({ created }, index) => [
+              `sec-${index + 1}`, String(created.id)
+            ]));
+            const remapSection = (value: unknown): unknown => {
+              const record = value as Record<string, unknown>;
+              const sectionId = sectionIds.get(String(record['sectionId'] ?? ''));
+              return sectionId ? { ...record, sectionId } : record;
+            };
+            const persistedMap = {
+              ...seatMapConfig,
+              sections: seatMapConfig.sections.map((value) => {
+                const section = value as Record<string, unknown>;
+                return { ...section, id: sectionIds.get(String(section['id'])) ?? section['id'] };
+              }),
+              tables: seatMapConfig.tables.map(remapSection),
+              elements: seatMapConfig.elements.map(remapSection)
+            };
+            return this.venueService.saveSeatMap(venue.id, persistedMap).pipe(
+              map(() => sections)
+            );
+          }),
           // 3. Generar asientos en backend para cada sección
           switchMap((sections) => from(sections).pipe(
             concatMap(({ created, source }) => {
-              const rowCount = Math.ceil((Number(source.tablesCount) || 1) / (Number(source.tablesPerRow) || 20));
-              const rowLetters = Array.from({ length: rowCount }, (_, i) => String.fromCharCode(65 + i)).join(',');
-              const seatsPerRow = (Number(source.tablesPerRow) || 20) * (Number(source.seatsPerTable) || 10);
+              const rowCount = this.parseRowCount(source.rows);
+              const rowLetters = this.parseRowLabels(source.rows, rowCount).join(',');
+              const tablesPerRow = Math.max(1, Number(source.seatsPerRow) || 20);
+              const seatsPerRow = tablesPerRow * 10;
 
               return this.venueService.generateSeats({
                 section_id: Number(created.id),
                 rows: rowLetters,
                 seats_per_row: seatsPerRow
-              }).pipe(catchError(() => of(null)));
+              }).pipe(catchError((err) => {
+                console.error('Error al generar asientos:', err);
+                return of(null);
+              }));
             }),
             toArray()
           )),
@@ -742,10 +874,10 @@ export class AdminEventsComponent implements OnInit {
   private buildParqueStyleSeatMap(rawSections: Array<{
     name: string;
     code: string;
-    tablesCount: number;
-    tablesPerRow: number;
-    seatsPerTable: number;
+    rows: string;
+    seatsPerRow: number;
     price: number;
+    serviceFee?: number;
   }>): {
     canvas_width: number;
     canvas_height: number;
@@ -765,85 +897,103 @@ export class AdminEventsComponent implements OnInit {
     const zoneBgColors = ['#fef3c7', '#e0f2fe', '#dcfce7', '#f1f5f9', '#f3e8ff', '#ecfdf5'];
 
     const elements: unknown[] = [
-      { id: 'stage', kind: 'stage', label: 'ESCENARIO', x: 460, y: 20, w: 980, h: 90, color: '#142238', textColor: '#fff7ed', rotation: 0 },
-      { id: 'foh-zone', kind: 'zone', label: 'FOH', x: 830, y: 1970, w: 240, h: 80, color: '#e2e8f0', textColor: '#0f172a', rotation: 0 }
+      { id: 'stage', kind: 'stage', label: 'ESCENARIO', x: 460, y: 20, w: 980, h: 90, color: '#142238', textColor: '#fff7ed', rotation: 0 }
     ];
 
     const mappedSections: unknown[] = [];
     const tables: unknown[] = [];
     let globalTableNumber = 1;
+    let globalRowNumber = 1;
     let currentY = 170;
 
     rawSections.forEach((sec, sIdx) => {
+      const sectionId = `sec-${sIdx + 1}`;
       const secColor = sectionColors[sIdx % sectionColors.length];
       const zoneBg = zoneBgColors[sIdx % zoneBgColors.length];
-      const count = Math.max(1, Number(sec.tablesCount) || 1);
-      const perRow = Math.max(1, Number(sec.tablesPerRow) || 20);
-      const seatsCount = Math.max(1, Number(sec.seatsPerTable) || 10);
-      const rowCount = Math.ceil(count / perRow);
+      const rowCount = this.parseRowCount(sec.rows);
+      const tablesPerRow = Math.max(1, Number(sec.seatsPerRow) || 20);
+      const totalTablesInSec = rowCount * tablesPerRow;
       const sectionStartY = currentY;
+      const sectionHeight = rowCount * 145 + 30;
 
       mappedSections.push({
-        id: sec.code?.toLowerCase() || `sec-${sIdx + 1}`,
+        id: sectionId,
         name: sec.name,
         price: Number(sec.price) || 150,
         color: secColor,
-        tableCount: count
+        tableCount: totalTablesInSec
       });
 
       elements.push({
-        id: `zone-${sec.code?.toLowerCase() || sIdx}`,
+        id: `zone-${sectionId}`,
+        sectionId,
         kind: 'zone',
         label: sec.name.toUpperCase(),
         x: 95,
         y: sectionStartY - 55,
         w: 1735,
-        h: rowCount * 145 + 30,
+        h: sectionHeight,
         color: zoneBg,
         textColor: '#0f172a',
         rotation: 0
       });
 
-      for (let i = 0; i < count; i++) {
-        const rowInSec = Math.floor(i / perRow);
-        const colInSec = i % perRow;
-        const spacingX = perRow > 1 ? Math.min(95, 1600 / (perRow - 1)) : 95;
-        const centerX = 150 + colInSec * spacingX;
-        const centerY = sectionStartY + rowInSec * 145;
+      for (let r = 0; r < rowCount; r++) {
+        const rowCenterY = sectionStartY + r * 145;
+        const spacingX = tablesPerRow > 1 ? Math.min(84, 1600 / (tablesPerRow - 1)) : 84;
 
-        const tableX = centerX - TABLE_W / 2;
-        const tableY = centerY - TABLE_H / 2;
+        for (let col = 0; col < tablesPerRow; col++) {
+          const centerX = 150 + col * spacingX;
+          const tableX = centerX - TABLE_W / 2;
+          const tableY = rowCenterY - TABLE_H / 2;
 
-        const seats: Array<{ number: number; x: number; y: number }> = [];
-        const seatsPerSide = Math.ceil(seatsCount / 2);
+          const seats: Array<{ number: number; x: number; y: number }> = [];
+          for (let s = 1; s <= 10; s++) {
+            const onLeft = s <= 5;
+            const sideIndex = onLeft ? s - 1 : s - 6;
+            const cx = onLeft ? -SEAT_OFFSET : TABLE_W + SEAT_OFFSET;
+            const cy = 11 + sideIndex * SEAT_SPACING;
+            seats.push({ number: s, x: cx, y: cy });
+          }
 
-        for (let s = 1; s <= seatsCount; s++) {
-          const onLeft = s <= seatsPerSide;
-          const sideIndex = onLeft ? s - 1 : s - seatsPerSide - 1;
-          const cx = onLeft ? -SEAT_OFFSET : TABLE_W + SEAT_OFFSET;
-          const cy = 11 + sideIndex * SEAT_SPACING;
-          seats.push({ number: s, x: cx, y: cy });
+          tables.push({
+            id: `table-${globalTableNumber}`,
+            label: String(globalTableNumber),
+            section: sec.name,
+            sectionId,
+            x: Math.round(tableX),
+            y: Math.round(tableY),
+            rotation: 0,
+            isRowStart: col === 0,
+            rowNumber: globalRowNumber,
+            seats
+          });
+
+          globalTableNumber++;
         }
 
-        tables.push({
-          id: `table-${globalTableNumber}`,
-          label: String(globalTableNumber),
-          section: sec.name,
-          x: Math.round(tableX),
-          y: Math.round(tableY),
-          rotation: 0,
-          seats
-        });
-
-        globalTableNumber++;
+        globalRowNumber++;
       }
 
-      currentY = sectionStartY + rowCount * 145 + 80;
+      currentY = sectionStartY + sectionHeight + 40;
     });
 
-    const canvasHeight = Math.max(2120, currentY + 120);
+    elements.push({
+      id: 'foh-zone',
+      kind: 'zone',
+      label: 'FOH (FRONT OF HOUSE)',
+      x: 830,
+      y: currentY + 30,
+      w: 240,
+      h: 80,
+      color: '#e2e8f0',
+      textColor: '#0f172a',
+      rotation: 0
+    });
+
+    const canvasHeight = Math.max(2120, currentY + 180);
     const totalTables = tables.length;
-    const totalSeats = rawSections.reduce((sum, s) => sum + (Number(s.tablesCount) || 0) * (Number(s.seatsPerTable) || 0), 0);
+    const totalSeats = totalTables * 10;
 
     return {
       canvas_width: CANVAS_W,
@@ -858,28 +1008,90 @@ export class AdminEventsComponent implements OnInit {
 
   private createSectionGroup(section?: VenueSection) {
     const defaultCode = section?.code?.trim()
-      || (section?.name ? section.name.trim().slice(0, 4).toUpperCase() : 'VIP');
+      || (section?.name ? section.name.trim().slice(0, 4).toUpperCase() : '');
 
-    const tierPrice = this.editingEvent
-      ? this.editingEvent.priceTiers.find((tier) =>
-          String(tier.sectionId ?? '') === String(section?.id ?? '')
-          || tier.name.trim().toLowerCase() === (section?.name ?? '').trim().toLowerCase()
-        )?.price
+    const tier = this.editingEvent
+      ? this.editingEvent.priceTiers.find((t) =>
+          String(t.sectionId ?? '') === String(section?.id ?? '')
+          || t.name.trim().toLowerCase() === (section?.name ?? '').trim().toLowerCase()
+        )
       : undefined;
 
     return this.fb.group({
       id: [section ? String(section.id) : ''],
-      name: [section?.name ?? 'VIP', Validators.required],
+      name: [section?.name ?? '', Validators.required],
       code: [defaultCode],
-      tablesCount: [20, [Validators.required, Validators.min(1)]],
-      tablesPerRow: [20, [Validators.required, Validators.min(1)]],
-      seatsPerTable: [10, [Validators.required, Validators.min(1)]],
-      price: [tierPrice ?? 150, [Validators.required, Validators.min(0)]]
+      rows: ['A' as string, Validators.required],
+      seatsPerRow: [1, [Validators.required, Validators.min(1)]],
+      price: [tier?.price ?? 150, [Validators.required, Validators.min(0)]],
+      serviceFee: [tier?.serviceFee ?? 0, [Validators.required, Validators.min(0)]]
     });
+  }
+
+  parseRowCount(rowsInput: string | number | null | undefined): number {
+    if (rowsInput === null || rowsInput === undefined) return 1;
+    const val = String(rowsInput).trim();
+    if (!val) return 1;
+
+    if (/^\d+$/.test(val)) {
+      return Math.max(1, parseInt(val, 10));
+    }
+
+    const letterRangeMatch = val.match(/^([A-Za-z])\s*-\s*([A-Za-z])$/);
+    if (letterRangeMatch) {
+      const start = letterRangeMatch[1].toUpperCase().charCodeAt(0);
+      const end = letterRangeMatch[2].toUpperCase().charCodeAt(0);
+      if (end >= start) return end - start + 1;
+    }
+
+    const numRangeMatch = val.match(/^(\d+)\s*-\s*(\d+)$/);
+    if (numRangeMatch) {
+      const start = parseInt(numRangeMatch[1], 10);
+      const end = parseInt(numRangeMatch[2], 10);
+      if (end >= start) return end - start + 1;
+    }
+
+    if (val.includes(',')) {
+      const parts = val.split(',').map((p) => p.trim()).filter(Boolean);
+      if (parts.length > 0) return parts.length;
+    }
+
+    return 1;
+  }
+
+  parseRowLabels(rowsInput: string | number | null | undefined, count: number): string[] {
+    if (rowsInput === null || rowsInput === undefined) {
+      return Array.from({ length: count }, (_, i) => String.fromCharCode(65 + (i % 26)));
+    }
+    const val = String(rowsInput).trim();
+    if (/^\d+$/.test(val)) {
+      const n = Math.max(1, parseInt(val, 10));
+      return Array.from({ length: n }, (_, i) => String.fromCharCode(65 + (i % 26)));
+    }
+    const letterRangeMatch = val.match(/^([A-Za-z])\s*-\s*([A-Za-z])$/);
+    if (letterRangeMatch) {
+      const start = letterRangeMatch[1].toUpperCase().charCodeAt(0);
+      const end = letterRangeMatch[2].toUpperCase().charCodeAt(0);
+      if (end >= start) {
+        const labels: string[] = [];
+        for (let code = start; code <= end; code++) labels.push(String.fromCharCode(code));
+        return labels;
+      }
+    }
+    if (val.includes(',')) {
+      const parts = val.split(',').map((p) => p.trim()).filter(Boolean);
+      if (parts.length > 0) return parts;
+    }
+    if (count > 1) {
+      return Array.from({ length: count }, (_, i) => String.fromCharCode(65 + (i % 26)));
+    }
+    return [val.toUpperCase() || 'A'];
   }
 
   private loadVenueSections(venueId: number | string): void {
     this.venueService.getVenueSections(venueId).subscribe((sections) => {
+      if (this.form.controls.venueMode.value !== 'existing'
+        || String(this.form.controls.venueId.value) !== String(venueId)) return;
       this.form.controls.sections.clear();
       sections.forEach((section) => this.addSection(section));
     });

@@ -137,9 +137,9 @@ import { MATERIAL_IMPORTS } from '../../shared/material/material-imports';
                   />
                   <text class="table-label map-table-label" [class.inactive]="activeSectionId && activeSectionId !== table.sectionId" [attr.x]="table.x + table.width / 2" [attr.y]="table.y + table.height / 2" text-anchor="middle" dominant-baseline="middle">{{ table.label }}</text>
                   
-                  <g *ngIf="isRowStart(table.label)" class="map-row-marker" [attr.transform]="'translate(' + (table.x - 62) + ' ' + (table.y + table.height / 2) + ')'" pointer-events="none">
+                  <g *ngIf="isRowStart(table.label, table)" class="map-row-marker" [attr.transform]="'translate(' + (table.x - 62) + ' ' + (table.y + table.height / 2) + ')'" pointer-events="none">
                     <circle r="15" fill="#0f172a" stroke="rgba(255, 255, 255, 0.78)" stroke-width="1.5" />
-                    <text x="0" y="1" text-anchor="middle" dominant-baseline="middle" fill="#ffffff" font-size="11" font-weight="800">{{ getRowNumber(table.label) }}</text>
+                    <text x="0" y="1" text-anchor="middle" dominant-baseline="middle" fill="#ffffff" font-size="11" font-weight="800">{{ getRowNumber(table.label, table) }}</text>
                   </g>
 
                   <g *ngFor="let seat of table.seats">
@@ -335,14 +335,17 @@ export class SeatMapComponent {
     return 'seat-fill-general';
   }
 
-  isRowStart(label: string | number): boolean {
+  isRowStart(label: string | number, table?: SeatTable | { x?: number; isRowStart?: boolean }): boolean {
+    if (table?.isRowStart !== undefined) return Boolean(table.isRowStart);
+    if (table?.x !== undefined && table.x <= 155) return true;
     const num = Number(label);
-    return Number.isFinite(num) ? (num - 1) % 10 === 0 : false;
+    return Number.isFinite(num) && num > 0 ? (num - 1) % 20 === 0 : false;
   }
 
-  getRowNumber(label: string | number): number {
+  getRowNumber(label: string | number, table?: SeatTable | { rowNumber?: number }): number {
+    if (table?.rowNumber !== undefined) return table.rowNumber;
     const num = Number(label);
-    return Number.isFinite(num) ? Math.floor((num - 1) / 10) + 1 : 1;
+    return Number.isFinite(num) && num > 0 ? Math.floor((num - 1) / 20) + 1 : 1;
   }
   private readonly events = inject(EventService);
   private readonly booking = inject(BookingService);

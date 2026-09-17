@@ -1267,7 +1267,7 @@ function calculateTablePosition(tableNumber: number, sectionName?: string): { x:
   }
 
   const columnIndex = sectionIndex % 20;
-  const centerX = 150 + columnIndex * 95;
+  const centerX = 150 + columnIndex * 84;
 
   let centerY: number;
   if (globalRow < 5) {

@@ -90,6 +90,10 @@ import { MATERIAL_IMPORTS } from '../../shared/material/material-imports';
               <mat-icon>calendar_month</mat-icon>
               <span class="nav-text">Eventos</span>
             </a>
+            <a routerLink="/dashboard/eventos-anteriores" routerLinkActive="is-active" [title]="collapsed() ? 'Eventos anteriores' : ''">
+              <mat-icon>history</mat-icon>
+              <span class="nav-text">Eventos anteriores</span>
+            </a>
             <a routerLink="/dashboard/venues" routerLinkActive="is-active" [title]="collapsed() ? 'Ubicaciones' : ''">
               <mat-icon>location_on</mat-icon>
               <span class="nav-text">Ubicaciones</span>

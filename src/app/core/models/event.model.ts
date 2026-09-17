@@ -2,6 +2,7 @@ export interface EventPriceTier {
   sectionId?: number | string;
   name: string;
   price: number;
+  serviceFee?: number;
   description: string;
   availability: 'available' | 'limited' | 'sold-out';
 }
@@ -15,6 +16,9 @@ export interface EventMetrics {
 export interface EventItem {
   id: string;
   venueId?: number | string;
+  archived?: boolean;
+  endsAt?: string;
+  expired?: boolean;
   slug: string;
   name: string;
   category: string;

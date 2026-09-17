@@ -29,6 +29,8 @@ export interface SeatTable {
   rotation?: number;
   seats: Seat[];
   disabled?: boolean;
+  rowNumber?: number;
+  isRowStart?: boolean;
 }
 
 export interface SeatSection {

@@ -33,6 +33,7 @@ interface PlanElement {
   color: string;
   textColor: string;
   rotation: number;
+  sectionId?: string;
 }
 
 interface PreviewTable {
@@ -46,6 +47,8 @@ interface PreviewTable {
   sectionName: string;
   color: string;
   rotation: number;
+  rowNumber?: number;
+  isRowStart?: boolean;
 }
 
 interface PreviewSeat {
@@ -261,11 +264,11 @@ function calculateReferenceTablePosition(tableNumber: number): { x: number; y: n
             <div class="two-col">
               <mat-form-field appearance="outline">
                 <mat-label>X</mat-label>
-                <input matInput type="number" [(ngModel)]="selectedElement.x">
+                <input matInput type="number" [ngModel]="selectedElement.x" (ngModelChange)="updateSelectedElementPosition('x', $event)">
               </mat-form-field>
               <mat-form-field appearance="outline">
                 <mat-label>Y</mat-label>
-                <input matInput type="number" [(ngModel)]="selectedElement.y">
+                <input matInput type="number" [ngModel]="selectedElement.y" (ngModelChange)="updateSelectedElementPosition('y', $event)">
               </mat-form-field>
               <mat-form-field appearance="outline">
                 <mat-label>Ancho</mat-label>
@@ -411,10 +414,10 @@ function calculateReferenceTablePosition(tableNumber: number): { x: number; y: n
                 />
                 <text [attr.x]="t.x + t.w / 2" [attr.y]="t.y + t.h / 2" text-anchor="middle" dominant-baseline="middle" class="map-table-label">{{ t.label }}</text>
                 
-                @if (isRowStart(t.label)) {
+                @if (isRowStart(t.label, t)) {
                 <g class="map-row-marker" [attr.transform]="'translate(' + (t.x - 62) + ' ' + (t.y + t.h / 2) + ')'" pointer-events="none">
                   <circle r="15" fill="#0f172a" stroke="rgba(255, 255, 255, 0.78)" stroke-width="1.5" />
-                  <text x="0" y="1" text-anchor="middle" dominant-baseline="middle" fill="#ffffff" font-size="11" font-weight="800">{{ getRowNumber(t.label) }}</text>
+                  <text x="0" y="1" text-anchor="middle" dominant-baseline="middle" fill="#ffffff" font-size="11" font-weight="800">{{ getRowNumber(t.label, t) }}</text>
                 </g>
                 }
 
@@ -590,14 +593,17 @@ export class SeatMapBuilderComponent implements OnInit {
     return 'seat-fill-general';
   }
 
-  isRowStart(label: string | number): boolean {
+  isRowStart(label: string | number, table?: PreviewTable | { x?: number; isRowStart?: boolean }): boolean {
+    if (table?.isRowStart !== undefined) return Boolean(table.isRowStart);
+    if (table?.x !== undefined && table.x <= 155) return true;
     const num = Number(label);
-    return Number.isFinite(num) ? (num - 1) % 10 === 0 : false;
+    return Number.isFinite(num) && num > 0 ? (num - 1) % 20 === 0 : false;
   }
 
-  getRowNumber(label: string | number): number {
+  getRowNumber(label: string | number, table?: PreviewTable | { rowNumber?: number }): number {
+    if (table?.rowNumber !== undefined) return table.rowNumber;
     const num = Number(label);
-    return Number.isFinite(num) ? Math.floor((num - 1) / 10) + 1 : 1;
+    return Number.isFinite(num) && num > 0 ? Math.floor((num - 1) / 20) + 1 : 1;
   }
 
   zoomIn(): void {
@@ -689,6 +695,7 @@ export class SeatMapBuilderComponent implements OnInit {
 
     for (const [sectionIndex, section] of this.sections.entries()) {
       const count = Math.max(0, Number(section.tableCount) || 0);
+      const zone = this.getZoneForSection(section, sectionIndex);
       for (let i = 0; i < count; i++) {
         const tableId = `${section.id}-t${i}`;
         const tableNumber = section.tableNumbers?.[i] ?? globalIndex + 1;
@@ -697,9 +704,7 @@ export class SeatMapBuilderComponent implements OnInit {
           : this.getDefaultTablePosition(sectionIndex, i);
         const current = this.tablePositions[tableId];
         const position = current
-          ? section.tableNumbers?.length
-            ? current
-            : this.keepTableInsideSection(sectionIndex, current.x, current.y, current.rotation)
+          ? this.keepTableInsideZone(zone, current.x, current.y, current.rotation)
           : { ...base, rotation: 0 };
 
         tables.push({
@@ -749,7 +754,8 @@ export class SeatMapBuilderComponent implements OnInit {
         h: 160,
         color: '#dbeafe',
         textColor: '#0f172a',
-        rotation: 0
+        rotation: 0,
+        sectionId
       }
     ];
   }
@@ -971,6 +977,17 @@ export class SeatMapBuilderComponent implements OnInit {
     this.selectedElement.rotation = this.normalizeRotation(value);
   }
 
+  updateSelectedElementPosition(axis: 'x' | 'y', value: number | string): void {
+    if (!this.selectedElement) return;
+    const parsed = Number(value);
+    if (!Number.isFinite(parsed)) return;
+    this.moveElement(
+      this.selectedElement.id,
+      axis === 'x' ? parsed : this.selectedElement.x,
+      axis === 'y' ? parsed : this.selectedElement.y
+    );
+  }
+
   resetLayout(): void {
     this.tablePositions = {};
     this.selectedTableId = '';
@@ -1046,6 +1063,7 @@ export class SeatMapBuilderComponent implements OnInit {
         const sections = this.extractArray(sectionsResponse, ['sections']);
         const seats = this.extractArray(seatsResponse, ['seats', 'event_seats', 'eventSeats']);
         const configuredTables = this.extractArray(venueConfig?.['tables'], ['tables']);
+        const configuredSections = this.extractArray(venueConfig?.['sections'], ['sections']);
         const rawSeats = seats.length ? seats : configuredTables.flatMap((table) => {
           const tableRecord = this.asRecord(table);
           const tableNumber = this.toFiniteNumber(tableRecord?.['number'] ?? tableRecord?.['label']);
@@ -1077,10 +1095,10 @@ export class SeatMapBuilderComponent implements OnInit {
           if (tableNumber === null || tableNumber < 1) return;
 
            const secName = String(
-             seat?.['section_name'] ??
-             this.asRecord(seat?.['section'])?.['name'] ??
              seat?.['section_id'] ??
             seat?.['sectionId'] ??
+            seat?.['section_name'] ??
+            this.asRecord(seat?.['section'])?.['name'] ??
             this.referenceSectionId(tableNumber)
           ).trim().toLowerCase();
 
@@ -1092,7 +1110,9 @@ export class SeatMapBuilderComponent implements OnInit {
           seatsPerTableByName.set(secName, counts);
         });
 
-        const normalizedSections = sections.length ? sections : this.createReferenceSections(sectionTablesByName);
+        const normalizedSections = !seats.length && configuredSections.length
+          ? configuredSections
+          : sections.length ? sections : this.createReferenceSections(sectionTablesByName);
         this.sections = normalizedSections.map((value, index) => {
           const section = this.asRecord(value);
           const secId = String(section?.['id'] ?? index + 1);
@@ -1101,16 +1121,7 @@ export class SeatMapBuilderComponent implements OnInit {
           const secIdLower = secId.trim().toLowerCase();
 
           let tableNumbersSet = sectionTablesByName.get(secIdLower) ?? sectionTablesByName.get(secNameLower);
-          if (!tableNumbersSet) {
-            for (const [key, set] of sectionTablesByName.entries()) {
-              if (key.includes(secNameLower) || secNameLower.includes(key) || key.includes(secIdLower)) {
-                tableNumbersSet = set;
-                break;
-              }
-            }
-          }
-
-          const tableNumbers = Array.from(tableNumbersSet ?? Array.from(sectionTablesByName.values())[0] ?? []).sort((a, b) => a - b);
+          const tableNumbers = Array.from(tableNumbersSet ?? []).sort((a, b) => a - b);
           const seatsMap = seatsPerTableByName.get(secIdLower) ?? seatsPerTableByName.get(secNameLower) ?? {};
 
           return {
@@ -1156,9 +1167,65 @@ export class SeatMapBuilderComponent implements OnInit {
             activeSectionIds.has(idLower.replace('-zone', ''));
         });
 
-        this.sections.forEach(sec => {
+        const zoneElements = this.planElements.filter((el) => el.kind === 'zone' && !el.id.toLowerCase().includes('foh'));
+        zoneElements.forEach((zoneEl, zIdx) => {
+          const zLabel = zoneEl.label.trim().toLowerCase();
+          const zId = zoneEl.id.trim().toLowerCase();
+          const matching = this.sections.find((s) => s.id === zoneEl.sectionId) ?? this.sections[zIdx] ?? this.sections.find((s) => {
+            const sName = s.name.trim().toLowerCase();
+            const sId = s.id.trim().toLowerCase();
+            return (
+              sName === zLabel ||
+              zLabel.includes(sName) ||
+              sName.includes(zLabel) ||
+              zId.includes(sId) ||
+              sId.includes(zId.replace('zone-', '').replace('-zone', ''))
+            );
+          }) ?? this.sections[zIdx];
+
+          if (matching) {
+            zoneEl.sectionId = matching.id;
+          }
+        });
+
+        const configuredTableByNum = new Map<number, { x: number; y: number; rotation: number }>();
+        const configuredTableById = new Map<string, { x: number; y: number; rotation: number }>();
+
+        configuredTables.forEach((tableItem) => {
+          const t = this.asRecord(tableItem);
+          if (!t) return;
+          const x = this.toFiniteNumber(t['x']);
+          const y = this.toFiniteNumber(t['y']);
+          const rotation = this.toFiniteNumber(t['rotation']) ?? 0;
+          if (x === null || y === null) return;
+          const pos = { x, y, rotation };
+          const tableNum = this.toFiniteNumber(t['number'] ?? t['label'] ?? String(t['id']).replace(/\D/g, ''));
+          if (tableNum !== null) {
+            configuredTableByNum.set(tableNum, pos);
+          }
+          if (t['id']) {
+            configuredTableById.set(String(t['id']), pos);
+          }
+        });
+
+        this.sections.forEach((sec, sIdx) => {
           (sec.tableNumbers ?? []).forEach((tableNumber, i) => {
-            newTablePositions[`${sec.id}-t${i}`] = calculateReferenceTablePosition(tableNumber);
+            const tableId = `${sec.id}-t${i}`;
+            const saved = configuredTableByNum.get(tableNumber)
+              ?? configuredTableById.get(tableId)
+              ?? configuredTableById.get(`table-${tableNumber}`);
+
+            if (saved) {
+              newTablePositions[tableId] = {
+                x: saved.x,
+                y: saved.y,
+                rotation: saved.rotation
+              };
+            } else if (configuredTables.length === 0) {
+              newTablePositions[tableId] = calculateReferenceTablePosition(tableNumber);
+            } else {
+              newTablePositions[tableId] = this.getDefaultTablePosition(sIdx, i);
+            }
           });
         });
 
@@ -1337,16 +1404,15 @@ export class SeatMapBuilderComponent implements OnInit {
     return { x: 40, y: 128, w: CANVAS_W - 80, h: CANVAS_H - 170 };
   }
 
-  private keepTableInsideSection(sectionIndex: number, x: number, y: number, rotation: number): { x: number; y: number; rotation: number } {
-    const bounds = this.getSectionBounds(sectionIndex);
-    const minX = bounds.x + SEAT_OFFSET + SEAT_RADIUS + 8;
-    const maxX = bounds.x + bounds.w - TABLE_W - SEAT_OFFSET - SEAT_RADIUS - 8;
-    const minY = bounds.y + 38;
-    const maxY = bounds.y + bounds.h - TABLE_H - 12;
+  private clampTableToCanvas(x: number, y: number, rotation: number): { x: number; y: number; rotation: number } {
+    const minX = 20;
+    const maxX = CANVAS_W - TABLE_W - 20;
+    const minY = 120;
+    const maxY = CANVAS_H - TABLE_H - 40;
 
     return {
-      x: this.clamp(Math.round(x), minX, Math.max(minX, maxX)),
-      y: this.clamp(Math.round(y), minY, Math.max(minY, maxY)),
+      x: this.clamp(Math.round(x), minX, maxX),
+      y: this.clamp(Math.round(y), minY, maxY),
       rotation: this.normalizeRotation(rotation)
     };
   }
@@ -1372,12 +1438,58 @@ export class SeatMapBuilderComponent implements OnInit {
     this.setTablePosition(table.id, table.x, table.y, nextRotation);
   }
 
+  private getZoneForSection(section: SectionDef, sectionIndex?: number): PlanElement | undefined {
+    const sId = (section.id || '').trim().toLowerCase();
+    const sName = (section.name || '').trim().toLowerCase();
+
+    const matched = this.planElements.find((el) => {
+      if (el.kind !== 'zone' || el.id.toLowerCase().includes('foh')) return false;
+      if (el.sectionId && el.sectionId.toLowerCase() === sId) return true;
+      const elLabel = (el.label || '').trim().toLowerCase();
+      const elId = (el.id || '').trim().toLowerCase();
+      return (
+        elLabel === sName ||
+        elLabel.includes(sName) ||
+        sName.includes(elLabel) ||
+        (sId && (elId.includes(sId) || sId.includes(elId.replace('zone-', '').replace('-zone', ''))))
+      );
+    });
+
+    if (matched) return matched;
+    if (sectionIndex !== undefined) {
+      const zones = this.planElements.filter((el) => el.kind === 'zone' && !el.id.toLowerCase().includes('foh'));
+      return zones[sectionIndex];
+    }
+    return undefined;
+  }
+
+  private keepTableInsideZone(zone: PlanElement | undefined, x: number, y: number, rotation: number): { x: number; y: number; rotation: number } {
+    if (zone) {
+      const minX = zone.x + SEAT_OFFSET + SEAT_RADIUS + 4;
+      const maxX = zone.x + zone.w - TABLE_W - SEAT_OFFSET - SEAT_RADIUS - 4;
+      const minY = zone.y + 14;
+      const maxY = zone.y + zone.h - TABLE_H - 14;
+
+      if (maxX >= minX && maxY >= minY) {
+        return {
+          x: this.clamp(Math.round(x), minX, maxX),
+          y: this.clamp(Math.round(y), minY, maxY),
+          rotation: this.normalizeRotation(rotation)
+        };
+      }
+    }
+
+    return this.clampTableToCanvas(x, y, rotation);
+  }
+
   private setTablePosition(tableId: string, x: number, y: number, rotation?: number): void {
     const current = this.tablePositions[tableId];
     const table = this.previewData.tables.find((item) => item.id === tableId);
+    const section = table ? this.sections.find((s) => s.id === table.sectionId) : undefined;
+    const sectionIndex = section ? this.sections.indexOf(section) : undefined;
+    const zone = section ? this.getZoneForSection(section, sectionIndex) : undefined;
     const nextRotation = rotation ?? current?.rotation ?? table?.rotation ?? 0;
-    const sectionIndex = table ? this.getTableSectionIndex(table.id) : 0;
-    const next = this.keepTableInsideSection(sectionIndex, x, y, nextRotation);
+    const next = this.keepTableInsideZone(zone, x, y, nextRotation);
     this.tablePositions = {
       ...this.tablePositions,
       [tableId]: next
@@ -1385,15 +1497,82 @@ export class SeatMapBuilderComponent implements OnInit {
   }
 
   private moveElement(elementId: string, x: number, y: number): void {
+    const currentElem = this.planElements.find((item) => item.id === elementId);
+    if (!currentElem) return;
+
+    const targetX = this.clamp(Math.round(x), 0, CANVAS_W - currentElem.w);
+    const targetY = this.clamp(Math.round(y), 0, CANVAS_H - currentElem.h);
+    const dx = targetX - currentElem.x;
+    const dy = targetY - currentElem.y;
+
+    if (dx === 0 && dy === 0) return;
+
+    if (currentElem.kind === 'zone') {
+      const tablesToMove = this.getTablesForZone(currentElem);
+      if (tablesToMove.length > 0) {
+        const updatedPositions = { ...this.tablePositions };
+        tablesToMove.forEach((table) => {
+          const currentPos = updatedPositions[table.id] ?? { x: table.x, y: table.y, rotation: table.rotation };
+          updatedPositions[table.id] = {
+            ...currentPos,
+            x: this.clamp(Math.round(currentPos.x + dx), 20, CANVAS_W - TABLE_W - 20),
+            y: this.clamp(Math.round(currentPos.y + dy), 120, CANVAS_H - TABLE_H - 40)
+          };
+        });
+        this.tablePositions = updatedPositions;
+      }
+    }
+
     this.planElements = this.planElements.map((element) =>
       element.id === elementId
         ? {
             ...element,
-            x: this.clamp(Math.round(x), 0, CANVAS_W - element.w),
-            y: this.clamp(Math.round(y), 0, CANVAS_H - element.h)
+            x: targetX,
+            y: targetY
           }
         : element
     );
+  }
+
+  private getTablesForZone(element: PlanElement): PreviewTable[] {
+    if (element.kind !== 'zone') return [];
+
+    const allTables = this.previewData.tables;
+    const labelLower = (element.label || '').trim().toLowerCase();
+    const idLower = (element.id || '').trim().toLowerCase();
+    const targetSectionId = element.sectionId;
+
+    // Strict lookup: find the specific section associated with this zone
+    const targetSection = this.sections.find((sec) => {
+      if (targetSectionId && sec.id === targetSectionId) return true;
+      const secNameLower = sec.name.trim().toLowerCase();
+      const secIdLower = sec.id.trim().toLowerCase();
+      return (
+        secNameLower === labelLower ||
+        labelLower.includes(secNameLower) ||
+        secNameLower.includes(labelLower) ||
+        idLower.includes(secIdLower) ||
+        secIdLower.includes(idLower.replace('zone-', '').replace('-zone', ''))
+      );
+    });
+
+    if (targetSection) {
+      // Return ONLY tables belonging strictly to this section
+      return allTables.filter((table) =>
+        table.sectionId === targetSection.id ||
+        table.sectionName.trim().toLowerCase() === targetSection.name.trim().toLowerCase()
+      );
+    }
+
+    // Direct match against table section properties only
+    return allTables.filter((table) => {
+      const secName = (table.sectionName || '').trim().toLowerCase();
+      const secId = (table.sectionId || '').trim().toLowerCase();
+      return (
+        Boolean(secName && (labelLower === secName || labelLower.includes(secName) || secName.includes(labelLower))) ||
+        Boolean(secId && (idLower.includes(secId) || secId.includes(idLower.replace('zone-', '').replace('-zone', ''))))
+      );
+    });
   }
 
   private resizeElement(elementId: string, width: number, height: number): void {

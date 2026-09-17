@@ -1,6 +1,6 @@
 import { AsyncPipe, CommonModule, DatePipe } from '@angular/common';
 import { Component, HostListener, inject } from '@angular/core';
-import { RouterLink } from '@angular/router';
+import { ActivatedRoute, RouterLink } from '@angular/router';
 import { BehaviorSubject, combineLatest, map, of, switchMap } from 'rxjs';
 import { BookingRecord } from '../../core/models/booking.model';
 import { EventItem } from '../../core/models/event.model';
@@ -787,6 +787,7 @@ export class OverviewComponent {
   private readonly auth = inject(AuthService);
   private readonly booking = inject(BookingService);
   private readonly events = inject(EventService);
+  private readonly route = inject(ActivatedRoute);
   private readonly dashboardMetrics = inject(DashboardMetricsService);
 
   readonly paymentOptions = [
@@ -801,7 +802,7 @@ export class OverviewComponent {
   isPaymentMenuOpen = false;
 
   private readonly filtersSubject = new BehaviorSubject<DashboardFilters>({
-    eventId: 'all',
+    eventId: this.route.snapshot.queryParamMap.get('eventId') ?? 'all',
     category: 'all',
     period: 'all',
     paymentMethods: []
@@ -812,7 +813,7 @@ export class OverviewComponent {
 
   readonly vm$ = combineLatest([
     this.booking.getReservations(),
-    this.events.getEvents(),
+    this.events.getAdminEvents(),
     this.filtersSubject
   ]).pipe(
     switchMap(([bookings, events, filters]) => {
@@ -1031,7 +1032,7 @@ export class OverviewComponent {
     const startOfToday = new Date();
     startOfToday.setHours(0, 0, 0, 0);
     const eventDate = new Date(event.date);
-    return event.status !== 'draft' && event.status !== 'sold-out' &&
+    return !event.archived && !event.expired && event.status !== 'draft' && event.status !== 'sold-out' &&
       !Number.isNaN(eventDate.getTime()) && eventDate.getTime() >= startOfToday.getTime();
   }
 
