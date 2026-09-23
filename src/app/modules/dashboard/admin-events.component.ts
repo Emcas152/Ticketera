@@ -43,90 +43,141 @@ import { CurrencyGtqPipe } from '../../shared/pipes/currency-gtq.pipe';
             <mat-step [completed]="venueStepValid">
               <ng-template matStepLabel>1. Ubicación</ng-template>
               <div class="step-content">
-                <mat-form-field appearance="outline">
-                  <mat-label>Origen del venue</mat-label>
-                  <mat-select formControlName="venueMode" (selectionChange)="onVenueModeChange()">
-                    <mat-option value="existing">Usar venue existente</mat-option>
-                    <mat-option value="new">Crear venue nuevo</mat-option>
-                  </mat-select>
-                </mat-form-field>
-
-                @if (form.controls.venueMode.value === 'existing') {
+                @if (editingEvent) {
+                  <div class="venue-locked-card">
+                    <div class="venue-locked-header">
+                      <mat-icon class="venue-icon">storefront</mat-icon>
+                      <div class="venue-locked-details">
+                        <strong>{{ form.controls.venueName.value || editingEvent.venueName }}</strong>
+                        <p>{{ form.controls.address.value }} &middot; {{ form.controls.city.value }}</p>
+                      </div>
+                      <span class="locked-badge"><mat-icon>lock</mat-icon> Recinto fijo</span>
+                    </div>
+                    <p class="step-note"><mat-icon>info</mat-icon> El recinto y el plano de mesas no se pueden modificar al editar un evento.</p>
+                  </div>
+                } @else {
                   <mat-form-field appearance="outline">
-                    <mat-label>Venue existente</mat-label>
-                    <mat-select formControlName="venueId" (selectionChange)="onVenueSelectionChange()">
-                      @for (venue of venues; track venue.id) {
-                        <mat-option [value]="venue.id.toString()">{{ venue.name }}</mat-option>
-                      }
+                    <mat-label>Origen del venue</mat-label>
+                    <mat-select formControlName="venueMode" (selectionChange)="onVenueModeChange()">
+                      <mat-option value="existing">Usar venue existente</mat-option>
+                      <mat-option value="new">Crear venue nuevo</mat-option>
                     </mat-select>
                   </mat-form-field>
-                  <p class="step-note"><mat-icon>lock</mat-icon> Se reutilizarán sus secciones y asientos sin modificarlos.</p>
-                } @else {
-                  <div class="form-grid">
-                    <mat-form-field appearance="outline"><mat-label>Nombre del venue</mat-label><input matInput formControlName="newVenueName" /></mat-form-field>
-                    <mat-form-field appearance="outline"><mat-label>Dirección</mat-label><input matInput formControlName="newVenueAddress" /></mat-form-field>
-                    <mat-form-field appearance="outline"><mat-label>Ciudad</mat-label><input matInput formControlName="newVenueCity" /></mat-form-field>
-                    <mat-form-field appearance="outline"><mat-label>País</mat-label><input matInput maxlength="2" formControlName="newVenueCountry" /></mat-form-field>
-                  </div>
+
+                  @if (form.controls.venueMode.value === 'existing') {
+                    <mat-form-field appearance="outline">
+                      <mat-label>Venue existente</mat-label>
+                      <mat-select formControlName="venueId" (selectionChange)="onVenueSelectionChange()">
+                        @for (venue of venues; track venue.id) {
+                          <mat-option [value]="venue.id.toString()">{{ venue.name }}</mat-option>
+                        }
+                      </mat-select>
+                    </mat-form-field>
+                    <p class="step-note"><mat-icon>lock</mat-icon> Se reutilizarán sus secciones y asientos sin modificarlos.</p>
+                  } @else {
+                    <div class="form-grid">
+                      <mat-form-field appearance="outline"><mat-label>Nombre del venue</mat-label><input matInput formControlName="newVenueName" /></mat-form-field>
+                      <mat-form-field appearance="outline"><mat-label>Dirección</mat-label><input matInput formControlName="newVenueAddress" /></mat-form-field>
+                      <mat-form-field appearance="outline"><mat-label>Ciudad</mat-label><input matInput formControlName="newVenueCity" /></mat-form-field>
+                      <mat-form-field appearance="outline"><mat-label>País</mat-label><input matInput maxlength="2" formControlName="newVenueCountry" /></mat-form-field>
+                    </div>
+                  }
                 }
                 <div class="step-actions"><button mat-flat-button type="button" matStepperNext [disabled]="!venueStepValid" (click)="onVenueStepNext()">Continuar</button></div>
               </div>
             </mat-step>
 
             <mat-step [completed]="sectionsStepValid">
-              <ng-template matStepLabel>2. Secciones y asientos</ng-template>
+              <ng-template matStepLabel>{{ editingEvent ? '2. Precios y fees de localidades' : '2. Secciones y asientos' }}</ng-template>
               <div class="step-content">
-                @if (form.controls.venueMode.value === 'existing') {
-                  <p class="step-note"><mat-icon>check_circle</mat-icon> {{ sectionControls.length }} secciones cargadas desde el venue existente.</p>
-                } @else {
-                  <p class="step-note"><mat-icon>auto_awesome</mat-icon> Configura las filas y mesas por fila para autogenerar el plano de mesas y localidades.</p>
-                }
-                <div formArrayName="sections" class="section-editor">
-                  @for (section of sectionControls; track section; let index = $index) {
-                    <div class="section-card" [formGroupName]="index">
-                      <div class="section-card-top">
-                        <span class="section-badge">{{ index + 1 }}</span>
-                        <mat-form-field appearance="outline" class="field-name">
-                          <mat-label>Sección*</mat-label>
-                          <input matInput formControlName="name" placeholder="general" />
-                        </mat-form-field>
-                        <mat-form-field appearance="outline" class="field-code">
-                          <mat-label>Código</mat-label>
-                          <input matInput formControlName="code" placeholder="G" />
-                        </mat-form-field>
-                        <button class="delete-section" mat-icon-button type="button" aria-label="Eliminar sección" matTooltip="Eliminar sección" (click)="removeSection(index)">
-                          <mat-icon>delete_outline</mat-icon>
-                        </button>
-                      </div>
+                @if (editingEvent) {
+                  <p class="step-note"><mat-icon>info</mat-icon> El mapa y la distribución de mesas están definidos por el recinto. Modifica únicamente el precio y el fee de servicio para cada localidad.</p>
+                  <div formArrayName="sections" class="section-editor">
+                    @for (section of sectionControls; track section; let index = $index) {
+                      <div class="section-card edit-mode-card" [formGroupName]="index">
+                        <div class="section-edit-header">
+                          <div class="section-identity">
+                            <span class="section-badge">{{ index + 1 }}</span>
+                            <div class="section-title-wrap">
+                              <strong class="section-name">{{ section.get('name')?.value || ('Localidad ' + (index + 1)) }}</strong>
+                              @if (section.get('code')?.value) {
+                                <span class="code-pill">{{ section.get('code')?.value }}</span>
+                              }
+                            </div>
+                          </div>
+                          <span class="map-locked-indicator"><mat-icon>lock</mat-icon> Mapa protegido</span>
+                        </div>
 
-                      <div class="section-card-bottom">
-                        <mat-form-field appearance="outline">
-                          <mat-label>Filas*</mat-label>
-                          <input matInput formControlName="rows" placeholder="A o 5" />
-                        </mat-form-field>
-                        <mat-form-field appearance="outline">
-                          <mat-label>Mesas por fila*</mat-label>
-                          <input matInput type="number" min="1" formControlName="seatsPerRow" placeholder="20" />
-                        </mat-form-field>
-                        <mat-form-field appearance="outline">
-                          <mat-label>Precio*</mat-label>
-                          <span matTextPrefix>Q&nbsp;</span>
-                          <input matInput type="number" min="0" formControlName="price" placeholder="100" />
-                        </mat-form-field>
-                        <mat-form-field appearance="outline">
-                          <mat-label>Fee servicio</mat-label>
-                          <span matTextPrefix>Q&nbsp;</span>
-                          <input matInput type="number" min="0" formControlName="serviceFee" placeholder="0" />
-                        </mat-form-field>
+                        <div class="section-pricing-grid">
+                          <mat-form-field appearance="outline">
+                            <mat-label>Precio de la localidad*</mat-label>
+                            <span matTextPrefix>Q&nbsp;</span>
+                            <input matInput type="number" min="0" formControlName="price" placeholder="100" />
+                          </mat-form-field>
+                          <mat-form-field appearance="outline">
+                            <mat-label>Fee servicio</mat-label>
+                            <span matTextPrefix>Q&nbsp;</span>
+                            <input matInput type="number" min="0" formControlName="serviceFee" placeholder="0" />
+                          </mat-form-field>
+                        </div>
                       </div>
-                    </div>
-                  } @empty {
-                    <p class="step-note warning"><mat-icon>warning</mat-icon> No hay secciones agregadas.</p>
+                    } @empty {
+                      <p class="step-note warning"><mat-icon>warning</mat-icon> No hay localidades registradas para este evento.</p>
+                    }
+                  </div>
+                } @else {
+                  @if (form.controls.venueMode.value === 'existing') {
+                    <p class="step-note"><mat-icon>check_circle</mat-icon> {{ sectionControls.length }} secciones cargadas desde el venue existente.</p>
+                  } @else {
+                    <p class="step-note"><mat-icon>auto_awesome</mat-icon> Configura las filas y mesas por fila para autogenerar el plano de mesas y localidades.</p>
                   }
-                </div>
-                <button class="btn-add-section" mat-stroked-button type="button" (click)="addSection()">
-                  <mat-icon>add</mat-icon> Agregar sección
-                </button>
+                  <div formArrayName="sections" class="section-editor">
+                    @for (section of sectionControls; track section; let index = $index) {
+                      <div class="section-card" [formGroupName]="index">
+                        <div class="section-card-top">
+                          <span class="section-badge">{{ index + 1 }}</span>
+                          <mat-form-field appearance="outline" class="field-name">
+                            <mat-label>Sección*</mat-label>
+                            <input matInput formControlName="name" placeholder="general" />
+                          </mat-form-field>
+                          <mat-form-field appearance="outline" class="field-code">
+                            <mat-label>Código</mat-label>
+                            <input matInput formControlName="code" placeholder="G" />
+                          </mat-form-field>
+                          <button class="delete-section" mat-icon-button type="button" aria-label="Eliminar sección" matTooltip="Eliminar sección" (click)="removeSection(index)">
+                            <mat-icon>delete_outline</mat-icon>
+                          </button>
+                        </div>
+
+                        <div class="section-card-bottom">
+                          <mat-form-field appearance="outline">
+                            <mat-label>Filas*</mat-label>
+                            <input matInput formControlName="rows" placeholder="A o 5" />
+                          </mat-form-field>
+                          <mat-form-field appearance="outline">
+                            <mat-label>Mesas por fila*</mat-label>
+                            <input matInput type="number" min="1" formControlName="seatsPerRow" placeholder="20" />
+                          </mat-form-field>
+                          <mat-form-field appearance="outline">
+                            <mat-label>Precio*</mat-label>
+                            <span matTextPrefix>Q&nbsp;</span>
+                            <input matInput type="number" min="0" formControlName="price" placeholder="100" />
+                          </mat-form-field>
+                          <mat-form-field appearance="outline">
+                            <mat-label>Fee servicio</mat-label>
+                            <span matTextPrefix>Q&nbsp;</span>
+                            <input matInput type="number" min="0" formControlName="serviceFee" placeholder="0" />
+                          </mat-form-field>
+                        </div>
+                      </div>
+                    } @empty {
+                      <p class="step-note warning"><mat-icon>warning</mat-icon> No hay secciones agregadas.</p>
+                    }
+                  </div>
+                  <button class="btn-add-section" mat-stroked-button type="button" (click)="addSection()">
+                    <mat-icon>add</mat-icon> Agregar sección
+                  </button>
+                }
                 <div class="step-actions"><button mat-button type="button" matStepperPrevious>Atrás</button><button mat-flat-button type="button" matStepperNext [disabled]="!sectionsStepValid">Continuar</button></div>
               </div>
             </mat-step>
@@ -385,6 +436,122 @@ import { CurrencyGtqPipe } from '../../shared/pipes/currency-gtq.pipe';
       .section-card-bottom { grid-template-columns: 1fr; }
     }
 
+    .venue-locked-card {
+      padding: 16px;
+      border: 1px solid #c7d2fe;
+      border-radius: 14px;
+      background: #f5f7ff;
+      display: grid;
+      gap: 10px;
+    }
+    .venue-locked-header {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+    .venue-icon {
+      color: #4f46e5;
+      font-size: 26px;
+      width: 26px;
+      height: 26px;
+    }
+    .venue-locked-details {
+      flex: 1;
+      min-width: 0;
+    }
+    .venue-locked-details strong {
+      display: block;
+      font-size: 0.98rem;
+      color: #1e1b4b;
+    }
+    .venue-locked-details p {
+      margin: 2px 0 0;
+      color: #4338ca;
+      font-size: 0.82rem;
+    }
+    .locked-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+      padding: 4px 10px;
+      border-radius: 999px;
+      background: #e0e7ff;
+      color: #3730a3;
+      font-size: 0.76rem;
+      font-weight: 700;
+      text-transform: uppercase;
+    }
+    .locked-badge mat-icon {
+      font-size: 14px;
+      width: 14px;
+      height: 14px;
+    }
+    .edit-mode-card {
+      border-left: 4px solid #3b82f6;
+    }
+    .section-edit-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      padding-bottom: 8px;
+      border-bottom: 1px solid #f1f5f9;
+    }
+    .section-identity {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      min-width: 0;
+    }
+    .section-title-wrap {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      flex-wrap: wrap;
+    }
+    .section-name {
+      font-size: 1rem;
+      color: #0f172a;
+      font-weight: 700;
+    }
+    .code-pill {
+      display: inline-block;
+      padding: 2px 8px;
+      background: #e2e8f0;
+      color: #334155;
+      border-radius: 6px;
+      font-size: 0.74rem;
+      font-weight: 700;
+      font-family: monospace;
+    }
+    .map-locked-indicator {
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+      font-size: 0.76rem;
+      font-weight: 600;
+      color: #059669;
+      background: #ecfdf5;
+      padding: 3px 8px;
+      border-radius: 999px;
+    }
+    .map-locked-indicator mat-icon {
+      font-size: 14px;
+      width: 14px;
+      height: 14px;
+    }
+    .section-pricing-grid {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 14px;
+      align-items: center;
+    }
+    @media (max-width: 600px) {
+      .section-pricing-grid {
+        grid-template-columns: 1fr;
+      }
+    }
+
     .image-upload { display: grid; gap: 8px; color: var(--text-muted); font-size: .82rem; }
     .image-upload input { display: none; }
     .image-upload img { width: 100%; height: 120px; object-fit: cover; border-radius: 10px; }
@@ -505,6 +672,7 @@ export class AdminEventsComponent implements OnInit {
   }
 
   get venueStepValid(): boolean {
+    if (this.editingEvent) return true;
     if (this.form.controls.venueMode.value === 'existing') return Boolean(this.form.controls.venueId.value);
     return Boolean(
       this.form.controls.newVenueName.value.trim() &&
@@ -594,14 +762,16 @@ export class AdminEventsComponent implements OnInit {
     this.selectedImage = null;
     this.imagePreview = event.image;
     const localDate = this.events.getEventLocalParts(event.date);
+    const matchedVenueId = event.venueId ? String(event.venueId) : this.findVenueIdByName(event.venueName);
     this.form.patchValue({
+      venueMode: 'existing',
       name: event.name,
       category: event.category,
       city: event.city,
       date: localDate.date,
       time: localDate.time,
       location: event.location,
-      venueId: this.findVenueIdByName(event.venueName),
+      venueId: matchedVenueId,
       venueName: event.venueName,
       address: event.address,
       description: event.description,
@@ -616,7 +786,26 @@ export class AdminEventsComponent implements OnInit {
       interested: event.metrics.interested,
       presaleStartsAt: ''
     });
-    this.onVenueSelectionChange();
+
+    // Cargar inmediatamente las localidades existentes para edición directa de precio y fee
+    this.form.controls.sections.clear();
+    if (event.priceTiers && event.priceTiers.length > 0) {
+      event.priceTiers.forEach((tier) => {
+        this.form.controls.sections.push(this.fb.group({
+          id: [tier.sectionId ? String(tier.sectionId) : ''],
+          name: [tier.name, Validators.required],
+          code: [tier.name.slice(0, 4).toUpperCase()],
+          rows: ['A', Validators.required],
+          seatsPerRow: [1, [Validators.required, Validators.min(1)]],
+          price: [tier.price, [Validators.required, Validators.min(0)]],
+          serviceFee: [tier.serviceFee ?? 0, [Validators.required, Validators.min(0)]]
+        }));
+      });
+    }
+
+    if (matchedVenueId) {
+      this.loadVenueSections(matchedVenueId);
+    }
   }
 
   publishEvent(event: EventItem): void {
@@ -763,6 +952,7 @@ export class AdminEventsComponent implements OnInit {
       imageFile: this.selectedImage,
       tags: this.parseTags(raw.tagsText),
       priceTiers: raw.sections.map((section) => ({
+        sectionId: section.id ? (Number(section.id) || section.id) : undefined,
         name: section.name,
         price: Number(section.price),
         serviceFee: Number(section.serviceFee || 0),
@@ -951,9 +1141,9 @@ export class AdminEventsComponent implements OnInit {
           for (let s = 1; s <= 10; s++) {
             const onLeft = s <= 5;
             const sideIndex = onLeft ? s - 1 : s - 6;
-            const cx = onLeft ? -SEAT_OFFSET : TABLE_W + SEAT_OFFSET;
-            const cy = 11 + sideIndex * SEAT_SPACING;
-            seats.push({ number: s, x: cx, y: cy });
+            const cx = onLeft ? tableX - SEAT_OFFSET : tableX + TABLE_W + SEAT_OFFSET;
+            const cy = tableY + 7 + sideIndex * 16;
+            seats.push({ number: s, x: Math.round(cx), y: Math.round(cy) });
           }
 
           tables.push({
@@ -1023,7 +1213,7 @@ export class AdminEventsComponent implements OnInit {
       code: [defaultCode],
       rows: ['A' as string, Validators.required],
       seatsPerRow: [1, [Validators.required, Validators.min(1)]],
-      price: [tier?.price ?? 150, [Validators.required, Validators.min(0)]],
+      price: [tier?.price ?? this.editingEvent?.basePrice ?? 150, [Validators.required, Validators.min(0)]],
       serviceFee: [tier?.serviceFee ?? 0, [Validators.required, Validators.min(0)]]
     });
   }
@@ -1089,11 +1279,32 @@ export class AdminEventsComponent implements OnInit {
   }
 
   private loadVenueSections(venueId: number | string): void {
-    this.venueService.getVenueSections(venueId).subscribe((sections) => {
-      if (this.form.controls.venueMode.value !== 'existing'
-        || String(this.form.controls.venueId.value) !== String(venueId)) return;
-      this.form.controls.sections.clear();
-      sections.forEach((section) => this.addSection(section));
+    this.venueService.getVenueSections(venueId).subscribe({
+      next: (sections) => {
+        if (this.form.controls.venueMode.value !== 'existing'
+          || String(this.form.controls.venueId.value) !== String(venueId)) return;
+
+        if (this.editingEvent) {
+          // Si ya teníamos secciones desde priceTiers del evento, enriquece id y código sin sobrescribir precios/fees
+          if (this.form.controls.sections.length > 0 && sections.length > 0) {
+            this.form.controls.sections.controls.forEach((group) => {
+              const secName = (group.get('name')?.value || '').trim().toLowerCase();
+              const match = sections.find((s) => s.name.trim().toLowerCase() === secName);
+              if (match) {
+                if (!group.get('id')?.value) group.patchValue({ id: String(match.id) });
+                if (match.code) group.patchValue({ code: match.code });
+              }
+            });
+            return;
+          }
+        }
+
+        this.form.controls.sections.clear();
+        sections.forEach((section) => this.addSection(section));
+      },
+      error: (err) => {
+        console.warn('No se pudieron cargar secciones del venue:', err);
+      }
     });
   }
 
@@ -1116,7 +1327,8 @@ export class AdminEventsComponent implements OnInit {
   }
 
   private findVenueIdByName(venueName: string): string {
-    return this.venues.find((venue) => venue.name === venueName)?.id.toString() ?? '';
+    const normalized = (venueName || '').trim().toLowerCase();
+    return this.venues.find((venue) => venue.name.trim().toLowerCase() === normalized)?.id.toString() ?? '';
   }
 
   private parseTags(value: string): string[] {

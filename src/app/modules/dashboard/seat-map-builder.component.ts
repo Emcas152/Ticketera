@@ -97,6 +97,31 @@ function calculateReferenceTablePosition(tableNumber: number): { x: number; y: n
   };
 }
 
+function getLocalSeatPosition(seatNumber: number, totalSeats: number): { relX: number; relY: number } {
+  const leftCount = Math.ceil(totalSeats / 2);
+  const rightCount = Math.floor(totalSeats / 2);
+  const onLeft = seatNumber <= leftCount;
+
+  const countOnSide = onLeft ? leftCount : rightCount;
+  const indexOnSide = onLeft ? seatNumber - 1 : seatNumber - leftCount - 1;
+
+  const relX = onLeft ? -SEAT_OFFSET : TABLE_W + SEAT_OFFSET;
+
+  if (countOnSide <= 1) {
+    return { relX, relY: Math.round(TABLE_H / 2) };
+  }
+
+  // Spacing so 5 seats fit cleanly between y=7 and y=71 (spacing = 16px, 3px visual gap)
+  // For fewer seats, maintain pleasant spacing between 16 and 22px, centered vertically
+  const spacing = countOnSide > 5 ? 15 : Math.min(22, (TABLE_H - 14) / (countOnSide - 1));
+  const totalSpread = (countOnSide - 1) * spacing;
+  const startY = (TABLE_H - totalSpread) / 2;
+
+  const relY = Math.round(startY + indexOnSide * spacing);
+  return { relX, relY };
+}
+
+
 @Component({
   selector: 'app-seat-map-builder',
   standalone: true,
@@ -160,11 +185,20 @@ function calculateReferenceTablePosition(tableNumber: number): { x: number; y: n
                 </div>
               </div>
               <div class="section-actions">
-                <button mat-stroked-button type="button" (click)="addTableToSection(section, i)" [disabled]="section.tableCount >= 20">
+                <button
+                  mat-stroked-button
+                  type="button"
+                  (click)="addTableToSection(section, i)"
+                  [disabled]="venueCapacity > 0 && availableSeats <= 0"
+                  [matTooltip]="venueCapacity > 0 && availableSeats <= 0 ? 'No hay asientos disponibles en el cupo. Reduce asientos de otra mesa primero.' : 'Agregar nueva mesa en esta sección'"
+                >
                   <mat-icon>add_circle_outline</mat-icon>
                   Agregar mesa
+                  @if (hasAvailableSeats) {
+                    <span class="seat-badge-small">+{{ getNewTableSeatAllocation() }} as.</span>
+                  }
                 </button>
-                <button mat-icon-button type="button" (click)="removeTableFromSection(section)" [disabled]="section.tableCount <= 0">
+                <button mat-icon-button type="button" (click)="removeTableFromSection(section)" [disabled]="section.tableCount <= 0" matTooltip="Eliminar última mesa de esta sección">
                   <mat-icon>remove_circle_outline</mat-icon>
                 </button>
               </div>
@@ -221,7 +255,12 @@ function calculateReferenceTablePosition(tableNumber: number): { x: number; y: n
 
           @if (selectedTable) {
           <div class="edit-panel">
-            <strong>Mesa {{ selectedTable.label }}</strong>
+            <div class="panel-title-row">
+              <strong>Mesa {{ selectedTable.label }}</strong>
+              <button mat-icon-button type="button" (click)="deleteSelectedTable()" matTooltip="Eliminar esta mesa" class="delete-table-btn">
+                <mat-icon>delete_outline</mat-icon>
+              </button>
+            </div>
             <p>{{ selectedTable.sectionName }}</p>
             <div class="two-col">
               <mat-form-field appearance="outline">
@@ -233,6 +272,13 @@ function calculateReferenceTablePosition(tableNumber: number): { x: number; y: n
                 <input matInput type="number" [ngModel]="selectedTable.y" (ngModelChange)="updateSelectedTablePosition('y', $event)">
               </mat-form-field>
             </div>
+            <mat-form-field appearance="outline">
+              <mat-label>Cantidad de Asientos</mat-label>
+              <input matInput type="number" [ngModel]="getSelectedTableSeatCount()" (ngModelChange)="updateSelectedTableSeatCount($event)" min="1" max="50">
+              @if (availableSeats > 0) {
+                <mat-hint>Disponibles en el venue: +{{ availableSeats }}</mat-hint>
+              }
+            </mat-form-field>
             <div class="orientation-row">
               <button mat-icon-button type="button" (click)="rotateSelectedTable(-15)">
                 <mat-icon>rotate_left</mat-icon>
@@ -243,6 +289,29 @@ function calculateReferenceTablePosition(tableNumber: number): { x: number; y: n
               <button mat-icon-button type="button" (click)="rotateSelectedTable(15)">
                 <mat-icon>rotate_right</mat-icon>
               </button>
+            </div>
+
+            @if (selectedSeatNumber) {
+            <div class="selected-seat-badge">
+              <span>Asiento <strong>#{{ selectedSeatNumber }}</strong> seleccionado</span>
+              <button mat-stroked-button type="button" class="flip-seat-btn" (click)="flipSelectedSeat()">
+                <mat-icon>swap_horiz</mat-icon>
+                Pasar este asiento al lado opuesto
+              </button>
+            </div>
+            }
+
+            <div class="seat-actions-group">
+              <button mat-stroked-button type="button" class="action-seats-btn" (click)="moveTableSeatsToOppositeStageSide(selectedTable.id)">
+                <mat-icon>vertical_align_bottom</mat-icon>
+                Lado contrario al escenario
+              </button>
+              @if (hasCustomSeatOffsets(selectedTable.id)) {
+              <button mat-stroked-button type="button" class="reset-seats-btn" (click)="resetTableSeats(selectedTable.id)">
+                <mat-icon>restart_alt</mat-icon>
+                Restablecer asientos a 2 filas
+              </button>
+              }
             </div>
           </div>
           }
@@ -295,8 +364,48 @@ function calculateReferenceTablePosition(tableNumber: number): { x: number; y: n
 
           <div class="config-summary">
             <div class="summary-row"><span>Total mesas</span><strong>{{ totalTables }}</strong></div>
-            <div class="summary-row"><span>Total asientos</span><strong>{{ totalSeats }}</strong></div>
+            <div class="summary-row">
+              <span>Capacidad venue</span>
+              <div class="capacity-field-inline">
+                <input type="number" class="capacity-input" [(ngModel)]="venueCapacity" min="0" title="Capacidad total de asientos permitidos en el venue">
+              </div>
+            </div>
+            <div class="summary-row">
+              <span>Asientos en pantalla</span>
+              <strong [class.seats-over]="isOverCapacity" [class.seats-available]="hasAvailableSeats">{{ totalSeats }}</strong>
+            </div>
+            @if (venueCapacity > 0) {
+            <div class="summary-row">
+              <span>Asientos disponibles</span>
+              <strong class="available-badge" [class.badge-green]="hasAvailableSeats" [class.badge-blue]="isExactCapacity" [class.badge-red]="isOverCapacity">
+                {{ availableSeats >= 0 ? '+' + availableSeats : availableSeats }}
+              </strong>
+            </div>
+            }
             <div class="summary-row"><span>Zonas</span><strong>{{ zoneCount }}</strong></div>
+
+            @if (venueCapacity > 0) {
+            <div class="capacity-status-card">
+              @if (hasAvailableSeats) {
+              <div class="status-indicator status-green">
+                <mat-icon>check_circle</mat-icon>
+                <span>Quedan <strong>{{ availableSeats }}</strong> asientos disponibles para agregar en nuevas mesas.</span>
+              </div>
+              }
+              @if (isExactCapacity) {
+              <div class="status-indicator status-blue">
+                <mat-icon>verified</mat-icon>
+                <span>Capacidad exacta completada ({{ totalSeats }} asientos).</span>
+              </div>
+              }
+              @if (isOverCapacity) {
+              <div class="status-indicator status-red">
+                <mat-icon>warning</mat-icon>
+                <span>Exceso: <strong>{{ totalSeats - venueCapacity }}</strong> asientos por encima de la capacidad.</span>
+              </div>
+              }
+            </div>
+            }
           </div>
 
           <button mat-flat-button type="button" class="save-btn" (click)="saveMap()">
@@ -309,7 +418,15 @@ function calculateReferenceTablePosition(tableNumber: number): { x: number; y: n
           <div class="preview-top">
             <div>
               <strong class="config-title">Editor visual</strong>
-              <p class="preview-subtitle">{{ venueName || 'Venue sin nombre' }} - {{ totalSeats }} asientos</p>
+              <p class="preview-subtitle">
+                {{ venueName || 'Venue sin nombre' }} &bull; {{ totalSeats }} asientos en pantalla
+                @if (venueCapacity > 0) {
+                  / {{ venueCapacity }} capacidad
+                  @if (hasAvailableSeats) {
+                    <span class="header-available-pill">+{{ availableSeats }} disponibles</span>
+                  }
+                }
+              </p>
             </div>
             <button mat-stroked-button type="button" (click)="resetLayout()">
               <mat-icon>restart_alt</mat-icon>
@@ -412,14 +529,16 @@ function calculateReferenceTablePosition(tableNumber: number): { x: number; y: n
                   class="map-table"
                   [ngClass]="getTableClass(t.sectionName)"
                 />
-                <text [attr.x]="t.x + t.w / 2" [attr.y]="t.y + t.h / 2" text-anchor="middle" dominant-baseline="middle" class="map-table-label">{{ t.label }}</text>
+                <text
+                  [attr.x]="t.x + t.w / 2"
+                  [attr.y]="t.y + t.h / 2"
+                  [attr.transform]="t.rotation ? 'rotate(' + (-t.rotation) + ' ' + (t.x + t.w / 2) + ' ' + (t.y + t.h / 2) + ')' : null"
+                  text-anchor="middle"
+                  dominant-baseline="middle"
+                  class="map-table-label"
+                >{{ t.label }}</text>
                 
-                @if (isRowStart(t.label, t)) {
-                <g class="map-row-marker" [attr.transform]="'translate(' + (t.x - 62) + ' ' + (t.y + t.h / 2) + ')'" pointer-events="none">
-                  <circle r="15" fill="#0f172a" stroke="rgba(255, 255, 255, 0.78)" stroke-width="1.5" />
-                  <text x="0" y="1" text-anchor="middle" dominant-baseline="middle" fill="#ffffff" font-size="11" font-weight="800">{{ getRowNumber(t.label, t) }}</text>
-                </g>
-                }
+
 
                 @if (selectedTableId === t.id) {
                 <g
@@ -441,15 +560,21 @@ function calculateReferenceTablePosition(tableNumber: number): { x: number; y: n
               </g>
               }
 
-              @for (s of previewData.seats; track $index) {
-              <circle
-                [class.selected-seat]="selectedTableId === s.tableId"
-                [attr.cx]="s.cx"
-                [attr.cy]="s.cy"
-                [attr.r]="SEAT_RADIUS"
-                [ngClass]="getSeatClass(s.color, s.tableId)"
-              />
-              <text [attr.x]="s.cx" [attr.y]="s.cy + 1" text-anchor="middle" dominant-baseline="middle" class="seat-number">{{ s.number }}</text>
+              @for (s of previewData.seats; track s.tableId + '-s' + s.number) {
+              <g
+                class="svg-seat-group"
+                [class.selected-seat-item]="selectedSeatKey === s.tableId + '-s' + s.number"
+                (pointerdown)="startSeatDrag(s, $event, venueSvg)"
+              >
+                <circle
+                  [class.selected-seat]="selectedTableId === s.tableId"
+                  [attr.cx]="s.cx"
+                  [attr.cy]="s.cy"
+                  [attr.r]="SEAT_RADIUS"
+                  [ngClass]="getSeatClass(s.color, s.tableId)"
+                />
+                <text [attr.x]="s.cx" [attr.y]="s.cy + 1" text-anchor="middle" dominant-baseline="middle" class="seat-number">{{ s.number }}</text>
+              </g>
               }
             </svg>
 
@@ -494,6 +619,13 @@ function calculateReferenceTablePosition(tableNumber: number): { x: number; y: n
     .map-row-marker text{fill:#ffffff;font-size:11px;font-weight:800;font-family:sans-serif}
 
     /* Seat Styles */
+    .svg-seat-group{cursor:grab}
+    .svg-seat-group:active{cursor:grabbing}
+    .svg-seat-group.selected-seat-item circle{stroke:#ffffff!important;stroke-width:2.5px!important;filter:drop-shadow(0 0 6px rgba(255,255,255,1))}
+    .selected-seat-badge{display:grid;gap:6px;padding:8px 10px;background:#e2e8f0;border-radius:8px;font-size:.8rem}
+    .selected-seat-badge span{font-weight:700;color:#0f172a}
+    .flip-seat-btn,.action-seats-btn,.reset-seats-btn{width:100%;font-size:.76rem!important;height:34px!important;line-height:32px!important}
+    .seat-actions-group{display:grid;gap:6px;margin-top:2px}
     .seat-number{fill:#ffffff;font-size:8px;font-weight:800;pointer-events:none;font-family:sans-serif}
     .seat-fill-diamante{fill:#091f49;stroke:rgba(255,255,255,.24);stroke-width:1}
     .seat-fill-vip{fill:#e06000;stroke:rgba(255,255,255,.24);stroke-width:1}
@@ -506,6 +638,24 @@ function calculateReferenceTablePosition(tableNumber: number): { x: number; y: n
     .center-btn{padding:0 16px;font-size:12px;text-transform:uppercase;letter-spacing:.14em;border-right:1px solid rgba(255,255,255,.15)}
     .zoom-icon-btn{width:36px;font-size:18px}
     .zoom-icon-btn:first-of-type{border-right:1px solid rgba(255,255,255,.15)}
+
+    .capacity-field-inline{display:flex;align-items:center}
+    .capacity-input{width:76px;padding:3px 6px;border:1px solid var(--surface-border);border-radius:6px;font-size:.82rem;font-weight:700;text-align:right;background:#fff;color:#0f172a}
+    .seats-over{color:#dc2626!important;font-weight:800}
+    .seats-available{color:#16a34a!important;font-weight:800}
+    .available-badge{padding:2px 8px;border-radius:9999px;font-size:.76rem;font-weight:800}
+    .badge-green{background:#dcfce7;color:#15803d}
+    .badge-blue{background:#dbeafe;color:#1d4ed8}
+    .badge-red{background:#fee2e2;color:#b91c1c}
+    .capacity-status-card{margin-top:4px}
+    .status-indicator{display:flex;align-items:center;gap:6px;font-size:.74rem;line-height:1.3;padding:8px 10px;border-radius:8px}
+    .status-indicator mat-icon{font-size:17px;width:17px;height:17px;flex-shrink:0}
+    .status-green{background:#f0fdf4;color:#166534;border:1px solid #bbf7d0}
+    .status-blue{background:#eff6ff;color:#1e40af;border:1px solid #bfdbfe}
+    .status-red{background:#fef2f2;color:#991b1b;border:1px solid #fecaca}
+    .seat-badge-small{margin-left:5px;font-size:.68rem;background:#16a34a;color:#fff;padding:1px 6px;border-radius:6px;font-weight:800}
+    .header-available-pill{display:inline-block;margin-left:6px;padding:2px 8px;border-radius:12px;background:#16a34a;color:#fff;font-size:.72rem;font-weight:800;vertical-align:middle}
+    .delete-table-btn{color:#ef4444!important}
 
     @media(max-width:1100px){.builder-layout{grid-template-columns:1fr}.sections-list,.svg-wrapper,.svg-wrapper svg{max-height:none}}@media(max-width:720px){.builder-header{align-items:flex-start;flex-direction:column}.two-col,.tool-grid{grid-template-columns:1fr}.svg-wrapper{padding:10px;min-height:320px}}
     .builder-header{background:var(--brand-gradient)}
@@ -536,8 +686,10 @@ export class SeatMapBuilderComponent implements OnInit {
   selectedVenueId: number | string | null = null;
   venues: Venue[] = [];
   selectedTableId = '';
+  selectedSeatKey = '';
   selectedElementId = '';
   private draggingTableId = '';
+  private draggingSeatKey = '';
   private rotatingTableId = '';
   private draggingElementId = '';
   private resizingElementId = '';
@@ -545,7 +697,9 @@ export class SeatMapBuilderComponent implements OnInit {
   private resizeStart = { x: 0, y: 0, w: 0, h: 0 };
   private rotationStart = { angle: 0, rotation: 0 };
   private tablePositions: Record<string, { x: number; y: number; rotation: number }> = {};
+  customSeatOffsets: Record<string, { relX: number; relY: number }> = {};
   private panPointerId: number | null = null;
+  private seatPointerId: number | null = null;
   private panStartClient = { x: 0, y: 0 };
   private panStartView = { x: 0, y: 0 };
 
@@ -671,6 +825,28 @@ export class SeatMapBuilderComponent implements OnInit {
     return this.previewData.seats.length;
   }
 
+  venueCapacity = 0;
+
+  get availableSeats(): number {
+    return this.venueCapacity > 0 ? (this.venueCapacity - this.totalSeats) : 0;
+  }
+
+  get isOverCapacity(): boolean {
+    return this.venueCapacity > 0 && this.totalSeats > this.venueCapacity;
+  }
+
+  get hasAvailableSeats(): boolean {
+    return this.availableSeats > 0;
+  }
+
+  get isExactCapacity(): boolean {
+    return this.venueCapacity > 0 && this.totalSeats === this.venueCapacity;
+  }
+
+  getNewTableSeatAllocation(): number {
+    return this.availableSeats > 0 ? Math.min(this.availableSeats, 10) : 10;
+  }
+
   get zoneCount(): number {
     return this.planElements.filter((element) => element.kind === 'zone').length;
   }
@@ -721,14 +897,19 @@ export class SeatMapBuilderComponent implements OnInit {
         });
 
         const seatCount = section.seatsPerTable?.[tableNumber] ?? 10;
-        const seatsPerSide = Math.ceil(seatCount / 2);
-        for (let seat = 0; seat < seatsPerSide; seat++) {
-          const seatY = position.y + 11 + seat * SEAT_SPACING;
-          const left = this.rotatePoint(position.x - SEAT_OFFSET, seatY, position.x + TABLE_W / 2, position.y + TABLE_H / 2, position.rotation);
-          const right = this.rotatePoint(position.x + TABLE_W + SEAT_OFFSET, seatY, position.x + TABLE_W / 2, position.y + TABLE_H / 2, position.rotation);
-          if (seat < seatCount) seats.push({ cx: left.x, cy: left.y, color: section.color, tableId, number: seat + 1 });
-          const rightNumber = seat + seatsPerSide + 1;
-          if (rightNumber <= seatCount) seats.push({ cx: right.x, cy: right.y, color: section.color, tableId, number: rightNumber });
+        if (seatCount > 0) {
+          for (let seat = 0; seat < seatCount; seat++) {
+            const seatNumber = seat + 1;
+            const seatKey = `${tableId}-s${seatNumber}`;
+            const custom = this.customSeatOffsets[seatKey];
+            const local = custom ?? getLocalSeatPosition(seatNumber, seatCount);
+
+            const cx = position.x + local.relX;
+            const cy = position.y + local.relY;
+            const rotated = this.rotatePoint(cx, cy, position.x + TABLE_W / 2, position.y + TABLE_H / 2, position.rotation);
+
+            seats.push({ cx: rotated.x, cy: rotated.y, color: section.color, tableId, number: seatNumber });
+          }
         }
 
         globalIndex++;
@@ -767,29 +948,133 @@ export class SeatMapBuilderComponent implements OnInit {
   }
 
   addTableToSection(section: SectionDef, sectionIndex: number): void {
-    if (section.tableCount >= 20) return;
-    const nextIndex = Math.max(0, Number(section.tableCount) || 0);
+    if (this.venueCapacity > 0 && this.availableSeats <= 0) {
+      this.snackBar.open(
+        'No hay asientos disponibles en el cupo. Reduce los asientos de otra mesa primero (ej. de 10 a 2) o amplía la capacidad del venue.',
+        'OK',
+        { duration: 4500 }
+      );
+      return;
+    }
+
+    // Determine next table number safely across all sections
+    const allTableNumbers = this.sections.flatMap((s) => s.tableNumbers ?? []);
+    const maxNumber = allTableNumbers.length > 0 ? Math.max(...allTableNumbers) : 0;
+    const nextTableNumber = Math.max(maxNumber + 1, this.totalTables + 1);
+
+    if (!section.tableNumbers) {
+      section.tableNumbers = [];
+    }
+    section.tableNumbers.push(nextTableNumber);
+    section.tableCount = section.tableNumbers.length;
+
+    // Allocate available seats (default to min(availableSeats, 10) or 10 if unlimited)
+    const seatsToAssign = this.availableSeats > 0 ? Math.min(this.availableSeats, 10) : 10;
+    if (!section.seatsPerTable) {
+      section.seatsPerTable = {};
+    }
+    section.seatsPerTable[nextTableNumber] = seatsToAssign;
+
+    const nextIndex = section.tableNumbers.length - 1;
     const tableId = `${section.id}-t${nextIndex}`;
-    const position = this.getDefaultTablePosition(sectionIndex, nextIndex);
-    section.tableCount = nextIndex + 1;
+    const position = this.getNewTablePosition(section, sectionIndex);
+
     this.tablePositions = {
       ...this.tablePositions,
       [tableId]: position
     };
     this.selectedTableId = tableId;
     this.selectedElementId = '';
+
+    const remaining = Math.max(0, this.availableSeats);
+    this.snackBar.open(
+      `Mesa #${nextTableNumber} creada con ${seatsToAssign} asientos en ${section.name}. (${remaining} asientos disponibles restantes).`,
+      'OK',
+      { duration: 3500, panelClass: ['success-toast'] }
+    );
   }
 
   removeTableFromSection(section: SectionDef): void {
     if (section.tableCount <= 0) return;
-    const nextCount = section.tableCount - 1;
-    const tableId = `${section.id}-t${nextCount}`;
-    section.tableCount = nextCount;
+    const removedNumber = section.tableNumbers?.pop();
+    section.tableCount = section.tableNumbers ? section.tableNumbers.length : Math.max(0, section.tableCount - 1);
+    const tableIndex = section.tableCount;
+    const tableId = `${section.id}-t${tableIndex}`;
+
+    let freedSeats = 10;
+    if (removedNumber !== undefined && section.seatsPerTable) {
+      freedSeats = section.seatsPerTable[removedNumber] ?? 10;
+      delete section.seatsPerTable[removedNumber];
+    }
+
     const { [tableId]: _removed, ...remainingPositions } = this.tablePositions;
     this.tablePositions = remainingPositions;
+
+    const prefix = `${tableId}-s`;
+    const nextOffsets = { ...this.customSeatOffsets };
+    for (const k of Object.keys(nextOffsets)) {
+      if (k.startsWith(prefix)) delete nextOffsets[k];
+    }
+    this.customSeatOffsets = nextOffsets;
+
     if (this.selectedTableId === tableId) {
       this.selectedTableId = '';
     }
+
+    this.snackBar.open(`Mesa eliminada. Se liberaron ${freedSeats} asientos.`, 'OK', { duration: 2500 });
+  }
+
+  deleteSelectedTable(): void {
+    if (!this.selectedTable) return;
+    const table = this.selectedTable;
+    const section = this.sections.find((s) => s.id === table.sectionId);
+    if (!section) return;
+
+    const tableNumber = Number(table.label);
+    const freedSeats = section.seatsPerTable?.[tableNumber] ?? 10;
+
+    if (section.tableNumbers) {
+      section.tableNumbers = section.tableNumbers.filter((n) => n !== tableNumber);
+    }
+    section.tableCount = section.tableNumbers ? section.tableNumbers.length : Math.max(0, section.tableCount - 1);
+
+    if (section.seatsPerTable) {
+      delete section.seatsPerTable[tableNumber];
+    }
+
+    const { [table.id]: _removed, ...remainingPositions } = this.tablePositions;
+    this.tablePositions = remainingPositions;
+
+    const prefix = `${table.id}-s`;
+    const nextOffsets = { ...this.customSeatOffsets };
+    for (const k of Object.keys(nextOffsets)) {
+      if (k.startsWith(prefix)) delete nextOffsets[k];
+    }
+    this.customSeatOffsets = nextOffsets;
+
+    this.selectedTableId = '';
+    this.selectedSeatKey = '';
+
+    this.snackBar.open(`Mesa #${tableNumber} eliminada. Se liberaron ${freedSeats} asientos.`, 'OK', { duration: 3000 });
+  }
+
+  private getNewTablePosition(section: SectionDef, sectionIndex: number): { x: number; y: number; rotation: number } {
+    const zone = this.getZoneForSection(section, sectionIndex);
+    if (zone) {
+      const existingInSec = this.previewData.tables.filter((t) => t.sectionId === section.id);
+      if (existingInSec.length > 0) {
+        const lastTable = existingInSec[existingInSec.length - 1];
+        let targetX = lastTable.x + TABLE_W + 56;
+        let targetY = lastTable.y;
+        if (targetX + TABLE_W + SEAT_OFFSET + SEAT_RADIUS + 8 > zone.x + zone.w) {
+          targetX = zone.x + SEAT_OFFSET + SEAT_RADIUS + 14;
+          targetY = lastTable.y + TABLE_H + 40;
+        }
+        return this.keepTableInsideZone(zone, targetX, targetY, 0);
+      }
+      return this.keepTableInsideZone(zone, zone.x + 40, zone.y + 40, 0);
+    }
+    return this.getDefaultTablePosition(sectionIndex, section.tableCount);
   }
 
   addZone(label: string, color: string): void {
@@ -854,10 +1139,108 @@ export class SeatMapBuilderComponent implements OnInit {
     this.selectedElementId = '';
   }
 
+  get selectedSeatNumber(): number | null {
+    if (!this.selectedSeatKey) return null;
+    const parts = this.selectedSeatKey.split('-s');
+    if (parts.length > 1) {
+      const num = Number(parts[parts.length - 1]);
+      if (Number.isFinite(num)) return num;
+    }
+    const match = this.selectedSeatKey.match(/-(\d+)$/);
+    return match ? Number(match[1]) : null;
+  }
+
+  getOppositeStageSide(table: PreviewTable): 'left' | 'right' {
+    const center = this.getTableCenter(table);
+    const posA = this.rotatePoint(table.x - SEAT_OFFSET, table.y + TABLE_H / 2, center.x, center.y, table.rotation);
+    const posB = this.rotatePoint(table.x + TABLE_W + SEAT_OFFSET, table.y + TABLE_H / 2, center.x, center.y, table.rotation);
+    return posB.y >= posA.y ? 'right' : 'left';
+  }
+
+  moveTableSeatsToOppositeStageSide(tableId: string): void {
+    const table = this.previewData.tables.find((t) => t.id === tableId);
+    if (!table) return;
+
+    const section = this.sections.find((s) => s.id === table.sectionId);
+    const tableNumber = Number(table.label);
+    const seatCount = section?.seatsPerTable?.[tableNumber] ?? 10;
+    if (seatCount <= 0) return;
+
+    const oppositeSide = this.getOppositeStageSide(table);
+    const targetRelX = oppositeSide === 'right' ? TABLE_W + SEAT_OFFSET : -SEAT_OFFSET;
+
+    const spacing = seatCount > 5 ? 15 : Math.min(22, (TABLE_H - 14) / Math.max(1, seatCount - 1));
+    const totalSpread = (seatCount - 1) * spacing;
+    const startY = (TABLE_H - totalSpread) / 2;
+
+    const nextOffsets = { ...this.customSeatOffsets };
+    for (let s = 1; s <= seatCount; s++) {
+      const relY = Math.round(seatCount === 1 ? TABLE_H / 2 : startY + (s - 1) * spacing);
+      nextOffsets[`${tableId}-s${s}`] = { relX: targetRelX, relY };
+    }
+
+    this.customSeatOffsets = nextOffsets;
+    this.snackBar.open('Asientos alineados al lado contrario del escenario', 'OK', { duration: 2500 });
+  }
+
+  flipSelectedSeat(): void {
+    if (!this.selectedSeatKey || !this.selectedTable) return;
+    const currentSeat = this.previewData.seats.find((s) => `${s.tableId}-s${s.number}` === this.selectedSeatKey);
+    if (!currentSeat) return;
+
+    const center = this.getTableCenter(this.selectedTable);
+    const unrotated = this.rotatePoint(currentSeat.cx, currentSeat.cy, center.x, center.y, -this.selectedTable.rotation);
+    const currentRelX = unrotated.x - this.selectedTable.x;
+    const currentRelY = unrotated.y - this.selectedTable.y;
+
+    const newRelX = currentRelX <= TABLE_W / 2 ? TABLE_W + SEAT_OFFSET : -SEAT_OFFSET;
+
+    this.customSeatOffsets = {
+      ...this.customSeatOffsets,
+      [this.selectedSeatKey]: { relX: newRelX, relY: Math.round(currentRelY) }
+    };
+    this.snackBar.open(`Asiento #${this.selectedSeatNumber} movido al lado opuesto`, 'OK', { duration: 2000 });
+  }
+
+  startSeatDrag(seat: PreviewSeat, event: PointerEvent, svg: Element): void {
+    event.preventDefault();
+    event.stopPropagation();
+    this.selectedTableId = seat.tableId;
+    this.selectedElementId = '';
+    this.selectedSeatKey = `${seat.tableId}-s${seat.number}`;
+    this.draggingSeatKey = this.selectedSeatKey;
+    this.draggingTableId = '';
+    this.draggingElementId = '';
+    this.rotatingTableId = '';
+    this.resizingElementId = '';
+    this.seatPointerId = event.pointerId;
+    (svg as SVGSVGElement).setPointerCapture?.(event.pointerId);
+    const point = this.getSvgPoint(event, svg);
+    this.dragOffset = { x: point.x - seat.cx, y: point.y - seat.cy };
+  }
+
+  hasCustomSeatOffsets(tableId: string): boolean {
+    const prefix = `${tableId}-s`;
+    return Object.keys(this.customSeatOffsets).some((k) => k.startsWith(prefix));
+  }
+
+  resetTableSeats(tableId: string): void {
+    const prefix = `${tableId}-s`;
+    const nextOffsets: Record<string, { relX: number; relY: number }> = {};
+    for (const [k, v] of Object.entries(this.customSeatOffsets)) {
+      if (!k.startsWith(prefix)) {
+        nextOffsets[k] = v;
+      }
+    }
+    this.customSeatOffsets = nextOffsets;
+    this.selectedSeatKey = '';
+  }
+
   startTableDrag(table: PreviewTable, event: PointerEvent, svg: Element): void {
     event.preventDefault();
     event.stopPropagation();
     this.selectedTableId = table.id;
+    this.selectedSeatKey = '';
     this.selectedElementId = '';
     this.rotatingTableId = '';
     this.draggingTableId = table.id;
@@ -923,6 +1306,24 @@ export class SeatMapBuilderComponent implements OnInit {
       return;
     }
 
+    if (this.draggingSeatKey) {
+      const currentSeat = this.previewData.seats.find((st) => `${st.tableId}-s${st.number}` === this.draggingSeatKey);
+      const currentTable = currentSeat ? this.previewData.tables.find((tb) => tb.id === currentSeat.tableId) : null;
+      if (currentSeat && currentTable) {
+        const targetCx = point.x - this.dragOffset.x;
+        const targetCy = point.y - this.dragOffset.y;
+        const center = this.getTableCenter(currentTable);
+        const unrotated = this.rotatePoint(targetCx, targetCy, center.x, center.y, -currentTable.rotation);
+        const relX = Math.round(unrotated.x - currentTable.x);
+        const relY = Math.round(unrotated.y - currentTable.y);
+        this.customSeatOffsets = {
+          ...this.customSeatOffsets,
+          [this.draggingSeatKey]: { relX, relY }
+        };
+      }
+      return;
+    }
+
     if (this.rotatingTableId) {
       this.rotateTableFromPoint(this.rotatingTableId, point);
       return;
@@ -940,9 +1341,14 @@ export class SeatMapBuilderComponent implements OnInit {
 
   endDrag(event?: PointerEvent, svg?: Element): void {
     this.draggingTableId = '';
+    this.draggingSeatKey = '';
     this.rotatingTableId = '';
     this.draggingElementId = '';
     this.resizingElementId = '';
+    if (this.seatPointerId !== null && event && svg) {
+      (svg as SVGSVGElement).releasePointerCapture?.(this.seatPointerId);
+      this.seatPointerId = null;
+    }
     if (this.panPointerId !== null && event && svg) {
       (svg as SVGSVGElement).releasePointerCapture?.(this.panPointerId);
     }
@@ -965,6 +1371,28 @@ export class SeatMapBuilderComponent implements OnInit {
   setSelectedTableRotation(value: number): void {
     if (!this.selectedTable) return;
     this.setTablePosition(this.selectedTable.id, this.selectedTable.x, this.selectedTable.y, value);
+  }
+
+  getSelectedTableSeatCount(): number {
+    if (!this.selectedTable) return 10;
+    const section = this.sections.find(s => s.id === this.selectedTable!.sectionId);
+    if (!section) return 10;
+    const tableNumber = Number(this.selectedTable.label);
+    return section.seatsPerTable?.[tableNumber] ?? 10;
+  }
+
+  updateSelectedTableSeatCount(count: number): void {
+    if (!this.selectedTable) return;
+    const parsed = Number(count);
+    if (!Number.isFinite(parsed) || parsed < 1 || parsed > 30) return;
+    const section = this.sections.find(s => s.id === this.selectedTable!.sectionId);
+    if (section) {
+      if (!section.seatsPerTable) {
+        section.seatsPerTable = {};
+      }
+      const tableNumber = Number(this.selectedTable.label);
+      section.seatsPerTable[tableNumber] = parsed;
+    }
   }
 
   rotateSelectedElement(delta: number): void {
@@ -990,7 +1418,9 @@ export class SeatMapBuilderComponent implements OnInit {
 
   resetLayout(): void {
     this.tablePositions = {};
+    this.customSeatOffsets = {};
     this.selectedTableId = '';
+    this.selectedSeatKey = '';
     this.selectedElementId = '';
     this.resetViewport();
   }
@@ -998,6 +1428,10 @@ export class SeatMapBuilderComponent implements OnInit {
   saveMap(): void {
     if (!this.selectedVenueId || this.isSavingMap) {
       return;
+    }
+
+    if (this.isOverCapacity) {
+      this.venueCapacity = this.totalSeats;
     }
 
     const config = {
@@ -1014,7 +1448,13 @@ export class SeatMapBuilderComponent implements OnInit {
         rotation: table.rotation,
         seats: this.previewData.seats
           .filter((seat) => seat.tableId === table.id)
-          .map((seat) => ({ number: seat.number, x: Math.round(seat.cx), y: Math.round(seat.cy) }))
+          .map((seat) => ({
+            number: seat.number,
+            x: Math.round(seat.cx),
+            y: Math.round(seat.cy),
+            relX: Math.round(seat.cx - table.x),
+            relY: Math.round(seat.cy - table.y)
+          }))
       })),
       total_seats: this.totalSeats,
       total_tables: this.totalTables
@@ -1190,6 +1630,7 @@ export class SeatMapBuilderComponent implements OnInit {
 
         const configuredTableByNum = new Map<number, { x: number; y: number; rotation: number }>();
         const configuredTableById = new Map<string, { x: number; y: number; rotation: number }>();
+        const loadedSeatOffsets: Record<string, { relX: number; relY: number }> = {};
 
         configuredTables.forEach((tableItem) => {
           const t = this.asRecord(tableItem);
@@ -1206,11 +1647,41 @@ export class SeatMapBuilderComponent implements OnInit {
           if (t['id']) {
             configuredTableById.set(String(t['id']), pos);
           }
+
+          const tableSeats = this.extractArray(t['seats'], ['seats']);
+          if (tableSeats.length) {
+            const center = { x: x + TABLE_W / 2, y: y + TABLE_H / 2 };
+            tableSeats.forEach((seatItem) => {
+              const s = this.asRecord(seatItem);
+              if (!s) return;
+              const sNum = this.toFiniteNumber(s['number'] ?? s['seat_number']);
+              const sx = this.toFiniteNumber(s['x']);
+              const sy = this.toFiniteNumber(s['y']);
+              if (sNum !== null && sx !== null && sy !== null) {
+                const defaultPos = getLocalSeatPosition(sNum, tableSeats.length);
+                const unrotated = this.rotatePoint(sx, sy, center.x, center.y, -rotation);
+                const relX = Math.round(unrotated.x - x);
+                const relY = Math.round(unrotated.y - y);
+                if (Math.abs(relX - defaultPos.relX) > 2 || Math.abs(relY - defaultPos.relY) > 2) {
+                  if (t['id']) loadedSeatOffsets[`${t['id']}-s${sNum}`] = { relX, relY };
+                  if (tableNum !== null) loadedSeatOffsets[`table-${tableNum}-s${sNum}`] = { relX, relY };
+                }
+              }
+            });
+          }
         });
 
         this.sections.forEach((sec, sIdx) => {
           (sec.tableNumbers ?? []).forEach((tableNumber, i) => {
             const tableId = `${sec.id}-t${i}`;
+            const numKey = `table-${tableNumber}`;
+            for (const [k, v] of Object.entries(loadedSeatOffsets)) {
+              if (k.startsWith(`${numKey}-s`)) {
+                const sSuffix = k.replace(`${numKey}-`, '');
+                loadedSeatOffsets[`${tableId}-${sSuffix}`] = v;
+              }
+            }
+
             const saved = configuredTableByNum.get(tableNumber)
               ?? configuredTableById.get(tableId)
               ?? configuredTableById.get(`table-${tableNumber}`);
@@ -1230,6 +1701,20 @@ export class SeatMapBuilderComponent implements OnInit {
         });
 
         this.tablePositions = newTablePositions;
+        this.customSeatOffsets = loadedSeatOffsets;
+
+        const savedTotalSeats = this.toFiniteNumber(savedMap?.['total_seats'] ?? venueConfig?.['total_seats']);
+        if (savedTotalSeats !== null && savedTotalSeats > 0) {
+          this.venueCapacity = savedTotalSeats;
+        } else if (sourceSeats.length > 0) {
+          this.venueCapacity = sourceSeats.length;
+        } else {
+          setTimeout(() => {
+            if (!this.venueCapacity && this.totalSeats > 0) {
+              this.venueCapacity = this.totalSeats;
+            }
+          });
+        }
 
         this.snackBar.open('Mapa cargado exitosamente', 'OK', {
           duration: 3000,

@@ -1,5 +1,5 @@
 import { inject, Injectable } from '@angular/core';
-import { BehaviorSubject, Observable, EMPTY, delay, expand, map, of, reduce, switchMap, tap } from 'rxjs';
+import { BehaviorSubject, Observable, EMPTY, catchError, delay, expand, map, of, reduce, switchMap, tap } from 'rxjs';
 import { environment } from '../../../environments/environment';
 import { MOCK_EVENTS } from '../mocks/mock-data';
 import { EventFilters, EventItem, EventPriceTier } from '../models/event.model';
@@ -242,14 +242,16 @@ export class EventService {
       switchMap((sections) => {
         if (sections.length === 0) return of(event);
 
+        const priceById = new Map(input.priceTiers.filter((t) => t.sectionId != null).map((t) => [String(t.sectionId), t.price]));
+        const feeById = new Map(input.priceTiers.filter((t) => t.sectionId != null).map((t) => [String(t.sectionId), t.serviceFee ?? 0]));
         const prices = new Map(input.priceTiers.map((tier) => [this.normalizeName(tier.name), tier.price]));
         const fees = new Map(input.priceTiers.map((tier) => [this.normalizeName(tier.name), tier.serviceFee ?? 0]));
         const payload = {
           event_id: Number(event.id),
           sections: sections.map((section) => ({
             section_id: Number(section.id),
-            price: prices.get(this.normalizeName(section.name)) ?? input.basePrice,
-            service_fee: fees.get(this.normalizeName(section.name)) ?? 0
+            price: priceById.get(String(section.id)) ?? prices.get(this.normalizeName(section.name)) ?? input.basePrice,
+            service_fee: feeById.get(String(section.id)) ?? fees.get(this.normalizeName(section.name)) ?? 0
           }))
         };
 
@@ -258,10 +260,14 @@ export class EventService {
           price_tiers: sections.map((section) => ({
             section_id: section.id,
             name: section.name,
-            price: prices.get(this.normalizeName(section.name)) ?? input.basePrice,
-            service_fee: fees.get(this.normalizeName(section.name)) ?? 0
+            price: priceById.get(String(section.id)) ?? prices.get(this.normalizeName(section.name)) ?? input.basePrice,
+            service_fee: feeById.get(String(section.id)) ?? fees.get(this.normalizeName(section.name)) ?? 0
           }))
         })));
+      }),
+      catchError((err) => {
+        console.error('Error al guardar precios de sección:', err);
+        return of(event);
       })
     );
   }

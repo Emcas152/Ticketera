@@ -860,8 +860,10 @@ export class BookingService {
 
       const tableSeats = apiTableSeats.map((s, idx) => {
         const sNum = this.tableSeatNumber(s, idx + 1);
-        const localPos = calculateLocalSeatPosition(sNum);
+        const localPos = calculateLocalSeatPosition(sNum, apiTableSeats.length);
         const mapped = this.mapLaravelSeat(s, sectionId, sectionName, 0, idx);
+        const seatX = s.x != null && Number.isFinite(Number(s.x)) ? Number(s.x) : position.x + localPos.cx;
+        const seatY = s.y != null && Number.isFinite(Number(s.y)) ? Number(s.y) : position.y + localPos.cy;
         return {
           ...mapped,
           section: sectionName,
@@ -869,8 +871,8 @@ export class BookingService {
           status: isTableDisabled ? ('sold' as const) : mapped.status,
           tableId: `table-${tableNumber}`,
           tableLabel: String(tableNumber),
-          x: position.x + localPos.cx,
-          y: position.y + localPos.cy
+          x: seatX,
+          y: seatY
         };
       });
 
@@ -1284,10 +1286,20 @@ function calculateTablePosition(tableNumber: number, sectionName?: string): { x:
   };
 }
 
-function calculateLocalSeatPosition(seatNumber: number): { cx: number; cy: number } {
-  const norm = Math.min(10, Math.max(1, Math.trunc(seatNumber)));
-  if (norm <= 5) {
-    return { cx: -10, cy: 11 + (norm - 1) * 14 };
+function calculateLocalSeatPosition(seatNumber: number, totalSeats = 10): { cx: number; cy: number } {
+  const norm = Math.max(1, Math.trunc(seatNumber));
+  const leftCount = Math.ceil(totalSeats / 2);
+  const onLeft = norm <= leftCount;
+  const countOnSide = onLeft ? leftCount : Math.floor(totalSeats / 2);
+  const indexOnSide = onLeft ? norm - 1 : norm - leftCount - 1;
+  const cx = onLeft ? -10 : 42;
+
+  if (countOnSide <= 1) {
+    return { cx, cy: 39 };
   }
-  return { cx: 42, cy: 11 + (norm - 6) * 14 };
+
+  const spacing = countOnSide > 5 ? 15 : Math.min(22, 64 / (countOnSide - 1));
+  const totalSpread = (countOnSide - 1) * spacing;
+  const startY = (78 - totalSpread) / 2;
+  return { cx, cy: Math.round(startY + indexOnSide * spacing) };
 }

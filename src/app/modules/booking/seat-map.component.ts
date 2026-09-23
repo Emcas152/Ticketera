@@ -131,16 +131,14 @@ import { MATERIAL_IMPORTS } from '../../shared/material/material-imports';
                     [attr.y]="table.y"
                     [attr.width]="table.width"
                     [attr.height]="table.height"
+                    [attr.transform]="table.rotation ? 'rotate(' + table.rotation + ' ' + (table.x + table.width / 2) + ' ' + (table.y + table.height / 2) + ')' : null"
                     rx="4"
                     ry="4"
                     (click)="focusTable(table)"
                   />
                   <text class="table-label map-table-label" [class.inactive]="activeSectionId && activeSectionId !== table.sectionId" [attr.x]="table.x + table.width / 2" [attr.y]="table.y + table.height / 2" text-anchor="middle" dominant-baseline="middle">{{ table.label }}</text>
                   
-                  <g *ngIf="isRowStart(table.label, table)" class="map-row-marker" [attr.transform]="'translate(' + (table.x - 62) + ' ' + (table.y + table.height / 2) + ')'" pointer-events="none">
-                    <circle r="15" fill="#0f172a" stroke="rgba(255, 255, 255, 0.78)" stroke-width="1.5" />
-                    <text x="0" y="1" text-anchor="middle" dominant-baseline="middle" fill="#ffffff" font-size="11" font-weight="800">{{ getRowNumber(table.label, table) }}</text>
-                  </g>
+
 
                   <g *ngFor="let seat of table.seats">
                     <circle class="seat-node" [ngClass]="getSeatClass(seat)" [class.selected]="selectedSeatIds.has(seat.id)" [class.inactive]="activeSectionId && activeSectionId !== table.sectionId && !selectedSeatIds.has(seat.id)" [attr.cx]="seat.x" [attr.cy]="seat.y" [attr.r]="seatRadius(seat)" (click)="openSeatCard(seat, $event)"/>
