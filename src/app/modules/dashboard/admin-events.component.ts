@@ -690,9 +690,14 @@ export class AdminEventsComponent implements OnInit {
     this.events.getEvents().subscribe((events) => events.forEach((event) => this.loadCourtesyLimit(event.id)));
     this.venueService.getVenues(true).subscribe((venues) => {
       this.venues = venues;
-      if (this.form.controls.venueMode.value === 'existing' && !this.form.controls.venueId.value && venues.length > 0) {
+      if (!this.editingEvent && this.form.controls.venueMode.value === 'existing' && !this.form.controls.venueId.value && venues.length > 0) {
         this.form.patchValue({ venueId: venues[0].id.toString() });
         this.onVenueSelectionChange();
+      } else if (this.editingEvent && !this.form.controls.venueId.value) {
+        const matchedVenueId = this.editingEvent.venueId ? String(this.editingEvent.venueId) : this.findVenueIdByName(this.editingEvent.venueName);
+        if (matchedVenueId) {
+          this.form.patchValue({ venueId: matchedVenueId });
+        }
       }
     });
   }
@@ -946,9 +951,22 @@ export class AdminEventsComponent implements OnInit {
       0
     );
 
+    const resolvedVenueId = this.editingEvent
+      ? (this.editingEvent.venueId ? String(this.editingEvent.venueId) : (raw.venueId || this.findVenueIdByName(this.editingEvent.venueName)))
+      : raw.venueId;
+
+    const resolvedCapacity = this.editingEvent
+      ? (this.editingEvent.metrics?.ticketsLeft || raw.capacity || calculatedCapacity || 100)
+      : (raw.capacity && raw.capacity > 0 ? raw.capacity : (calculatedCapacity || 100));
+
     return {
       ...raw,
-      capacity: raw.capacity && raw.capacity > 0 ? raw.capacity : (calculatedCapacity || 100),
+      venueId: resolvedVenueId,
+      venueName: this.editingEvent?.venueName || raw.venueName,
+      location: this.editingEvent?.location || raw.location,
+      address: this.editingEvent?.address || raw.address,
+      city: this.editingEvent?.city || raw.city,
+      capacity: resolvedCapacity,
       imageFile: this.selectedImage,
       tags: this.parseTags(raw.tagsText),
       priceTiers: raw.sections.map((section) => ({
@@ -1285,15 +1303,46 @@ export class AdminEventsComponent implements OnInit {
           || String(this.form.controls.venueId.value) !== String(venueId)) return;
 
         if (this.editingEvent) {
-          // Si ya teníamos secciones desde priceTiers del evento, enriquece id y código sin sobrescribir precios/fees
-          if (this.form.controls.sections.length > 0 && sections.length > 0) {
-            this.form.controls.sections.controls.forEach((group) => {
-              const secName = (group.get('name')?.value || '').trim().toLowerCase();
-              const match = sections.find((s) => s.name.trim().toLowerCase() === secName);
-              if (match) {
-                if (!group.get('id')?.value) group.patchValue({ id: String(match.id) });
-                if (match.code) group.patchValue({ code: match.code });
-              }
+          // Mantener sincronizadas las secciones del venue sin alterar su estructura
+          // conservando los precios y fees definidos en el evento
+          if (sections.length > 0) {
+            const currentControls = this.form.controls.sections.controls;
+            const priceMap = new Map<string, { price: number; serviceFee: number }>();
+
+            currentControls.forEach((group) => {
+              const name = (group.get('name')?.value || '').trim().toLowerCase();
+              const id = group.get('id')?.value;
+              const val = {
+                price: Number(group.get('price')?.value) || 0,
+                serviceFee: Number(group.get('serviceFee')?.value) || 0
+              };
+              if (name) priceMap.set(name, val);
+              if (id) priceMap.set(String(id), val);
+            });
+
+            this.editingEvent.priceTiers.forEach((tier) => {
+              const name = tier.name.trim().toLowerCase();
+              const id = tier.sectionId ? String(tier.sectionId) : undefined;
+              const val = {
+                price: Number(tier.price) || 0,
+                serviceFee: Number(tier.serviceFee) || 0
+              };
+              if (!priceMap.has(name)) priceMap.set(name, val);
+              if (id && !priceMap.has(id)) priceMap.set(id, val);
+            });
+
+            this.form.controls.sections.clear();
+            sections.forEach((sec) => {
+              const match = priceMap.get(String(sec.id)) ?? priceMap.get(sec.name.trim().toLowerCase());
+              this.form.controls.sections.push(this.fb.group({
+                id: [String(sec.id)],
+                name: [sec.name, Validators.required],
+                code: [sec.code || sec.name.slice(0, 4).toUpperCase()],
+                rows: ['A', Validators.required],
+                seatsPerRow: [1, [Validators.required, Validators.min(1)]],
+                price: [match?.price ?? this.editingEvent?.basePrice ?? 150, [Validators.required, Validators.min(0)]],
+                serviceFee: [match?.serviceFee ?? 0, [Validators.required, Validators.min(0)]]
+              }));
             });
             return;
           }

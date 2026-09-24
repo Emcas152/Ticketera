@@ -174,23 +174,25 @@ export class EventService {
   }
 
   private mapAdminInputToEvent(input: EventAdminInput, eventId?: string): EventItem {
+    const existing = eventId ? this.eventsSubject.value.find((e) => String(e.id) === String(eventId)) : undefined;
     const id = eventId ?? `evt-${this.slugify(input.name)}-${Date.now().toString().slice(-5)}`;
     const priceTiers = input.priceTiers.length > 0 ? input.priceTiers : this.defaultPriceTiers(input.basePrice);
 
     return {
       id,
+      venueId: input.venueId || existing?.venueId,
       slug: this.slugify(input.name),
       name: input.name,
       category: input.category,
       city: input.city,
       date: this.toEventIso(input.date, input.time),
       time: input.time,
-      location: input.location,
-      venueName: input.venueName,
-      address: input.address,
+      location: existing?.location ?? input.location,
+      venueName: existing?.venueName ?? input.venueName,
+      address: existing?.address ?? input.address,
       image: input.image || 'https://images.unsplash.com/photo-1501281668745-f7f57925c3b4?auto=format&fit=crop&w=1200&q=80',
       pdfImage: input.image,
-      bannerColor: input.bannerColor || '#6a00ff',
+      bannerColor: input.bannerColor || existing?.bannerColor || '#6a00ff',
       basePrice: input.basePrice,
       description: input.description,
       shortDescription: input.shortDescription || input.description.slice(0, 120),
@@ -198,9 +200,9 @@ export class EventService {
       status: input.status,
       tags: input.tags,
       metrics: {
-        interested: input.interested,
-        ticketsLeft: input.capacity,
-        rating: 4.7
+        interested: input.interested ?? existing?.metrics.interested ?? 0,
+        ticketsLeft: input.capacity || existing?.metrics.ticketsLeft || 0,
+        rating: existing?.metrics.rating ?? 4.7
       },
       priceTiers
     };
@@ -227,6 +229,9 @@ export class EventService {
 
   private mapAdminInputToFormData(input: EventAdminInput, update = false): FormData {
     const payload = this.mapAdminInputToLaravel(input);
+    if (update) {
+      delete (payload as unknown as Record<string, unknown>)['venue_id'];
+    }
     const formData = new FormData();
     Object.entries(payload).forEach(([key, value]) => {
       if (value !== null && value !== undefined) formData.append(key, String(value));
@@ -238,7 +243,13 @@ export class EventService {
   }
 
   private saveSectionPrices(event: LaravelEvent, input: EventAdminInput): Observable<LaravelEvent> {
-    return this.api.get<LaravelSection[]>(`/sections/venue/${input.venueId}`).pipe(
+    const existing = this.eventsSubject.value.find((item) => String(item.id) === String(event.id));
+    const venueId = event.venue?.id ?? input.venueId ?? existing?.venueId;
+    if (!venueId) {
+      return of(event);
+    }
+
+    return this.api.get<LaravelSection[]>(`/sections/venue/${venueId}`).pipe(
       switchMap((sections) => {
         if (sections.length === 0) return of(event);
 
@@ -257,6 +268,13 @@ export class EventService {
 
         return this.api.post('/event-sections-price', payload).pipe(map(() => ({
           ...event,
+          venue: event.venue ?? (existing?.venueId ? {
+            id: existing.venueId,
+            name: existing.venueName,
+            address: existing.address,
+            city: existing.city,
+            sections: sections.map((s) => ({ id: s.id, name: s.name }))
+          } : null),
           price_tiers: sections.map((section) => ({
             section_id: section.id,
             name: section.name,
@@ -285,44 +303,49 @@ export class EventService {
   }
 
   private mapLaravelEvent(event: LaravelEvent): EventItem {
+    const existing = this.eventsSubject.value.find((item) => String(item.id) === String(event.id));
     const date = this.normalizeApiDate(event.starts_at) ?? new Date().toISOString();
     const venue = event.venue;
+    const venueId = venue?.id ?? existing?.venueId;
+    const venueName = venue?.name ?? existing?.venueName ?? 'Venue pendiente';
+    const address = venue?.address ?? existing?.address ?? '';
+    const city = venue?.city ?? existing?.city ?? 'Guatemala';
     const sections = venue?.sections ?? [];
     const seats = sections.flatMap((section) => section.seats ?? []);
     const prices = seats.map((seat) => Number(seat.price)).filter((price) => Number.isFinite(price));
-    const basePrice = Number(event.base_price ?? (prices.length > 0 ? Math.min(...prices) : 0));
+    const basePrice = Number(event.base_price ?? (prices.length > 0 ? Math.min(...prices) : (existing?.basePrice ?? 0)));
 
     return {
       id: String(event.id),
-      venueId: venue?.id,
+      venueId,
       archived: event.status === 'eliminado',
       expired: event.status === 'expirado',
-      endsAt: this.normalizeApiDate(event.ends_at) ?? undefined,
+      endsAt: this.normalizeApiDate(event.ends_at) ?? existing?.endsAt,
       slug: this.slugify(event.title),
       name: event.title,
-      category: event.category ?? 'general',
-      city: venue?.city ?? 'Guatemala',
+      category: event.category ?? existing?.category ?? 'general',
+      city,
       date,
       time: new Intl.DateTimeFormat('es-GT', { timeZone: 'America/Guatemala', hour: '2-digit', minute: '2-digit', hour12: false }).format(new Date(date)),
-      location: venue?.name ?? 'Venue pendiente',
-      venueName: venue?.name ?? 'Venue pendiente',
-      address: venue?.address ?? '',
-      image: event.image_url || 'https://images.unsplash.com/photo-1501281668745-f7f57925c3b4?auto=format&fit=crop&w=1200&q=80',
-      pdfImage: event.image_url ? `${environment.apiBaseUrl}/events/${event.id}/image` : undefined,
-      bannerColor: '#6a00ff',
+      location: venueName,
+      venueName,
+      address,
+      image: event.image_url || existing?.image || 'https://images.unsplash.com/photo-1501281668745-f7f57925c3b4?auto=format&fit=crop&w=1200&q=80',
+      pdfImage: event.image_url ? `${environment.apiBaseUrl}/events/${event.id}/image` : existing?.pdfImage,
+      bannerColor: existing?.bannerColor ?? '#6a00ff',
       basePrice,
-      description: event.description ?? '',
-      shortDescription: (event.description ?? '').slice(0, 120),
+      description: event.description ?? existing?.description ?? '',
+      shortDescription: (event.description ?? existing?.description ?? '').slice(0, 120),
       featured: event.status === 'publicado',
       status: this.mapStatusFromLaravel(event.status),
-      tags: [event.category ?? 'general'].filter(Boolean),
+      tags: [event.category ?? existing?.category ?? 'general'].filter(Boolean),
       metrics: {
-        interested: 0,
-        ticketsLeft: Number(event.capacity) || seats.filter((seat) => seat.state === 'available').length || seats.length,
+        interested: existing?.metrics.interested ?? 0,
+        ticketsLeft: Number(event.capacity) || (seats.length > 0 ? (seats.filter((seat) => seat.state === 'available').length || seats.length) : (existing?.metrics.ticketsLeft || 0)),
         rating: 4.7
       },
       priceTiers: event.price_tiers?.length
-          ? event.price_tiers.map((tier) => ({
+        ? event.price_tiers.map((tier) => ({
             sectionId: tier.section_id,
             name: tier.name,
             price: Number(tier.price),
@@ -330,7 +353,7 @@ export class EventService {
             description: `Sector ${tier.name}.`,
             availability: 'available' as const
           }))
-        : this.mapPriceTiers(sections, basePrice)
+        : (sections.length > 0 ? this.mapPriceTiers(sections, basePrice) : (existing?.priceTiers ?? []))
     };
   }
 
